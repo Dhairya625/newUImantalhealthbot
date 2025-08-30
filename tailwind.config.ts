@@ -28,17 +28,25 @@ export default {
 					DEFAULT: 'hsl(var(--primary))',
 					foreground: 'hsl(var(--primary-foreground))',
 					soft: 'hsl(var(--primary-soft))',
-					glow: 'hsl(var(--primary-glow))'
+					glow: 'hsl(var(--primary-glow))',
+					lighter: 'hsl(var(--primary-lighter))'
 				},
 				secondary: {
 					DEFAULT: 'hsl(var(--secondary))',
 					foreground: 'hsl(var(--secondary-foreground))',
-					soft: 'hsl(var(--secondary-soft))'
+					soft: 'hsl(var(--secondary-soft))',
+					lighter: 'hsl(var(--secondary-lighter))'
 				},
 				accent: {
 					DEFAULT: 'hsl(var(--accent))',
 					foreground: 'hsl(var(--accent-foreground))',
-					soft: 'hsl(var(--accent-soft))'
+					soft: 'hsl(var(--accent-soft))',
+					lighter: 'hsl(var(--accent-lighter))'
+				},
+				tertiary: {
+					DEFAULT: 'hsl(var(--tertiary))',
+					foreground: 'hsl(var(--tertiary-foreground))',
+					soft: 'hsl(var(--tertiary-soft))'
 				},
 				destructive: {
 					DEFAULT: 'hsl(var(--destructive))',
@@ -55,6 +63,13 @@ export default {
 				card: {
 					DEFAULT: 'hsl(var(--card))',
 					foreground: 'hsl(var(--card-foreground))'
+				},
+				stress: {
+					'very-low': 'hsl(var(--stress-very-low))',
+					'low': 'hsl(var(--stress-low))',
+					'moderate': 'hsl(var(--stress-moderate))',
+					'high': 'hsl(var(--stress-high))',
+					'very-high': 'hsl(var(--stress-very-high))'
 				},
 				mood: {
 					excellent: 'hsl(var(--mood-excellent))',

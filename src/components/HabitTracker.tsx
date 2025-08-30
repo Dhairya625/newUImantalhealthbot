@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Target, Plus, Trash2, Calendar } from "lucide-react";
+import { Target, Plus, Trash2, Calendar, Flame, Trophy } from "lucide-react";
 import { useWellness } from "@/hooks/wellness-context";
 
 interface Habit {
@@ -18,14 +18,14 @@ const categoryColors = {
   mindfulness: "accent",
   health: "primary",
   reflection: "secondary",
-  exercise: "mood-good",
-  learning: "mood-excellent",
+  exercise: "stress-low",
+  learning: "stress-very-low",
 };
 
 export function HabitTracker() {
   const [newHabitName, setNewHabitName] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
-  const { habits, addHabit, toggleHabit, deleteHabit } = useWellness();
+  const { habits, addHabit, toggleHabit, deleteHabit, getDailyHabitCompletions } = useWellness();
 
   const handleAddHabit = () => {
     if (newHabitName.trim()) {
@@ -48,19 +48,19 @@ export function HabitTracker() {
 
       {/* Progress Overview */}
       <Card className="wellness-card">
-        <div className="flex items-center justify-between text-white">
+        <div className="flex items-center justify-between text-card-foreground">
           <div>
             <h2 className="text-xl font-semibold mb-2">Today's Progress</h2>
-            <p className="text-white/90">{completedCount} of {totalHabits} habits completed</p>
+            <p className="text-card-foreground/90">{completedCount} of {totalHabits} habits completed</p>
           </div>
           <div className="text-right">
             <div className="text-3xl font-bold">{completionPercentage}%</div>
-            <div className="text-white/90">Complete</div>
+            <div className="text-card-foreground/90">Complete</div>
           </div>
         </div>
-        <div className="mt-4 bg-white/20 rounded-full h-2">
+        <div className="mt-4 bg-card-foreground/20 rounded-full h-2">
           <div 
-            className="bg-white rounded-full h-2 transition-all duration-500"
+            className="bg-card-foreground rounded-full h-2 transition-all duration-500"
             style={{ width: `${completionPercentage}%` }}
           />
         </div>
@@ -147,6 +147,94 @@ export function HabitTracker() {
               </div>
             </Card>
           ))}
+        </div>
+      </Card>
+
+      {/* Streak Bar - Daily Habit Completion */}
+      <Card className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold flex items-center">
+            <Flame className="h-5 w-5 mr-2 text-orange-500" />
+            Habit Streak
+          </h2>
+          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+            <Trophy className="h-4 w-4 text-yellow-500" />
+            <span>Last 30 days</span>
+          </div>
+        </div>
+        
+        <div className="space-y-4">
+          {/* Current Streak Info */}
+          <div className="flex items-center justify-between p-4 bg-gradient-to-r from-orange-50 to-red-50 rounded-lg border border-orange-200">
+            <div className="flex items-center space-x-3">
+              <div className="w-12 h-12 bg-gradient-to-br from-orange-400 to-red-500 rounded-full flex items-center justify-center">
+                <Flame className="h-6 w-6 text-primary-foreground" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Current Streak</p>
+                <p className="text-2xl font-bold text-orange-600">
+                  {habits.length > 0 ? Math.max(...habits.map(h => h.streak)) : 0} days
+                </p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-muted-foreground">Best Streak</p>
+              <p className="text-lg font-semibold text-orange-600">
+                {habits.length > 0 ? Math.max(...habits.map(h => h.streak)) : 0} days
+              </p>
+            </div>
+          </div>
+
+          {/* Streak Grid */}
+          <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(30, 1fr)' }}>
+            {getDailyHabitCompletions(30).map((day, index) => {
+              const completionRate = day.totalHabits > 0 ? day.habitIds.length / day.totalHabits : 0;
+              const isToday = index === 29;
+              
+              let bgColor = "bg-gray-100";
+              if (completionRate === 1) bgColor = "bg-green-500"; // All habits completed
+              else if (completionRate >= 0.5) bgColor = "bg-green-300"; // Most habits completed
+              else if (completionRate > 0) bgColor = "bg-green-200"; // Some habits completed
+              else if (isToday) bgColor = "bg-blue-200"; // Today (no habits yet)
+              
+              return (
+                <div
+                  key={day.date}
+                  className={`w-3 h-3 rounded-sm ${bgColor} hover:scale-125 transition-transform cursor-pointer relative group`}
+                  title={`${day.date}: ${day.habitIds.length}/${day.totalHabits} habits completed`}
+                >
+                  {/* Tooltip */}
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-popover text-popover-foreground text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                    {day.date}: {day.habitIds.length}/{day.totalHabits} habits
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          
+          {/* Legend */}
+          <div className="flex items-center justify-center space-x-4 text-xs text-muted-foreground">
+            <div className="flex items-center space-x-1">
+              <div className="w-3 h-3 bg-gray-100 rounded-sm"></div>
+              <span>No habits</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <div className="w-3 h-3 bg-green-200 rounded-sm"></div>
+              <span>Some habits</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <div className="w-3 h-3 bg-green-300 rounded-sm"></div>
+              <span>Most habits</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <div className="w-3 h-3 bg-green-500 rounded-sm"></div>
+              <span>All habits</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <div className="w-3 h-3 bg-blue-200 rounded-sm"></div>
+              <span>Today</span>
+            </div>
+          </div>
         </div>
       </Card>
     </div>

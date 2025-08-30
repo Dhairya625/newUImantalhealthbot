@@ -1,15 +1,17 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { useTheme } from "next-themes";
 import { 
   Heart, 
   Moon, 
-  Smile, 
+  AlertTriangle, 
   Target, 
   PenTool, 
   Calendar,
   MessageCircle,
   Menu,
-  Settings
+  Settings,
+  Sun
 } from "lucide-react";
 import { Settings as SettingsPanel } from "./Settings";
 
@@ -21,7 +23,7 @@ interface NavigationProps {
 const navItems = [
   { id: "chat", label: "Chat", icon: MessageCircle },
   { id: "dashboard", label: "Dashboard", icon: Heart },
-  { id: "mood", label: "Mood", icon: Smile },
+  { id: "stress", label: "Stress", icon: AlertTriangle },
   { id: "sleep", label: "Sleep", icon: Moon },
   { id: "habits", label: "Habits", icon: Target },
   { id: "journal", label: "Journal", icon: PenTool },
@@ -31,6 +33,11 @@ const navItems = [
 export function Navigation({ activeSection, onSectionChange }: NavigationProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const { theme, setTheme } = useTheme();
+
+  const toggleTheme = () => {
+    setTheme(theme === "dark" ? "light" : "dark");
+  };
 
   return (
     <>
@@ -45,25 +52,42 @@ export function Navigation({ activeSection, onSectionChange }: NavigationProps) 
       {/* Mobile menu overlay */}
       {isMenuOpen && (
         <div 
-          className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 md:hidden"
+          className="fixed inset-0 bg-background/20 backdrop-blur-sm z-40 md:hidden"
           onClick={() => setIsMenuOpen(false)}
         />
       )}
 
-      {/* Settings Button - Top right corner */}
-      <div className="fixed top-4 right-4 z-50 md:block">
+      {/* Theme Toggle Button - Top right corner */}
+      <div className="fixed top-6 right-24 z-50 md:block">
         <button
-          onClick={() => setIsSettingsOpen(true)}
-          className="group relative flex flex-col items-center justify-center w-12 h-12 rounded-2xl bg-card/20 backdrop-blur-xl border border-white/20 shadow-2xl transition-all duration-300 ease-out hover:scale-110 active:scale-95"
-          title="Settings"
+          onClick={toggleTheme}
+          className="fab group relative flex flex-col items-center justify-center w-14 h-14 transition-all duration-500 ease-out hover:scale-110 active:scale-95 float"
+          title={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
         >
-          <Settings className="h-5 w-5 text-muted-foreground group-hover:text-foreground transition-colors duration-200" />
+          <div className="absolute inset-0 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+          {theme === "dark" ? (
+            <Sun className="h-6 w-6 text-primary-foreground drop-shadow-sm transition-all duration-300 group-hover:rotate-45 group-hover:scale-110" />
+          ) : (
+            <Moon className="h-6 w-6 text-primary-foreground drop-shadow-sm transition-all duration-300 group-hover:-rotate-12 group-hover:scale-110" />
+          )}
         </button>
       </div>
 
-      {/* macOS Dock-style Navigation */}
-      <nav className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-40 md:block">
-        <div className="flex items-center space-x-2 px-4 py-3 bg-card/20 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl opacity-30 hover:opacity-100 focus-within:opacity-100 transition-opacity duration-300">
+      {/* Settings Button - Top right corner */}
+      <div className="fixed top-6 right-6 z-50 md:block">
+        <button
+          onClick={() => setIsSettingsOpen(true)}
+          className="fab group relative flex flex-col items-center justify-center w-14 h-14 transition-all duration-500 ease-out hover:scale-110 active:scale-95 gentle-bounce"
+          title="Settings"
+        >
+          <div className="absolute inset-0 rounded-full bg-gradient-to-br from-secondary/20 to-tertiary/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+          <Settings className="h-6 w-6 text-primary-foreground drop-shadow-sm transition-all duration-300 group-hover:rotate-90 group-hover:scale-110" />
+        </button>
+      </div>
+
+      {/* macOS Dock-style Navigation - Enhanced */}
+      <nav className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-40 md:block">
+        <div className="nav-glass flex items-center space-x-4 px-8 py-5 rounded-3xl opacity-40 hover:opacity-100 focus-within:opacity-100 transition-all duration-500 hover:scale-105">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeSection === item.id;
@@ -76,32 +100,40 @@ export function Navigation({ activeSection, onSectionChange }: NavigationProps) 
                   setIsMenuOpen(false);
                 }}
                 className={cn(
-                  "group relative flex flex-col items-center justify-center w-16 h-16 rounded-2xl transition-all duration-300 ease-out",
-                  "hover:scale-110 active:scale-95",
+                  "group relative flex flex-col items-center justify-center w-18 h-18 rounded-2xl",
+                  "transition-all duration-500 ease-out hover:scale-125 active:scale-95",
+                  "transform-gpu will-change-transform",
                   isActive 
-                    ? "bg-primary/20 text-primary shadow-lg shadow-primary/25" 
-                    : "text-muted-foreground hover:text-foreground hover:bg-white/10"
+                    ? "bg-gradient-to-br from-primary/30 via-primary/20 to-primary/10 text-primary shadow-lg shadow-primary/20 scale-110" 
+                    : "text-muted-foreground hover:text-foreground hover:bg-gradient-to-br hover:from-muted/30 hover:to-muted/10"
                 )}
                 title={item.label}
               >
-                {/* Active indicator ring */}
+                {/* Glow effect for active */}
                 {isActive && (
-                  <div className="absolute inset-0 rounded-2xl border-2 border-primary/30 animate-pulse" />
+                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 animate-pulse" />
                 )}
                 
-                {/* Icon */}
+                {/* Hover glow effect */}
+                <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-primary/10 to-accent/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                
+                {/* Icon with enhanced effects */}
                 <Icon className={cn(
-                  "h-7 w-7 transition-all duration-300",
-                  isActive ? "text-primary" : "group-hover:text-foreground"
+                  "relative z-10 h-8 w-8 transition-all duration-300 drop-shadow-sm",
+                  isActive ? "text-primary scale-110" : "group-hover:text-foreground group-hover:scale-110",
+                  item.id === 'chat' && "group-hover:animate-pulse",
+                  item.id === 'dashboard' && "group-hover:animate-bounce"
                 )} />
                 
-                {/* Label tooltip */}
-                <span className={cn(
-                  "absolute -bottom-8 left-1/2 transform -translate-x-1/2 px-2 py-1 text-xs font-medium rounded-lg transition-all duration-200 opacity-0 group-hover:opacity-100",
-                  "bg-black/80 text-white backdrop-blur-sm"
+                {/* Enhanced tooltip */}
+                <div className={cn(
+                  "absolute -bottom-14 left-1/2 transform -translate-x-1/2 px-4 py-3 text-sm font-medium rounded-xl",
+                  "glass-card opacity-0 group-hover:opacity-100 transition-all duration-300 group-hover:translate-y-1",
+                  "backdrop-blur-xl border border-white/20 text-foreground shadow-lg"
                 )}>
                   {item.label}
-                </span>
+                  <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 w-3 h-3 bg-card/80 border border-white/20 rotate-45"></div>
+                </div>
               </button>
             );
           })}
@@ -111,8 +143,8 @@ export function Navigation({ activeSection, onSectionChange }: NavigationProps) 
       {/* Mobile Navigation - Full screen overlay */}
       {isMenuOpen && (
         <nav className="fixed inset-0 z-30 md:hidden">
-          <div className="absolute bottom-0 left-0 right-0 p-6 bg-card/95 backdrop-blur-xl border-t border-border/50">
-            <div className="grid grid-cols-4 gap-4">
+          <div className="absolute bottom-0 left-0 right-0 p-8 bg-card/95 backdrop-blur-xl border-t border-border/50">
+            <div className="grid grid-cols-4 gap-6">
               {navItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = activeSection === item.id;
@@ -125,14 +157,14 @@ export function Navigation({ activeSection, onSectionChange }: NavigationProps) 
                       setIsMenuOpen(false);
                     }}
                     className={cn(
-                      "flex flex-col items-center justify-center p-4 rounded-2xl transition-all duration-200",
+                      "flex flex-col items-center justify-center p-5 rounded-2xl transition-all duration-200",
                       isActive 
                         ? "bg-primary/20 text-primary" 
                         : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                     )}
                   >
-                    <Icon className={cn("h-6 w-6 mb-2", isActive && "text-primary")} />
-                    <span className="text-xs font-medium text-center">{item.label}</span>
+                    <Icon className={cn("h-7 w-7 mb-3", isActive && "text-primary")} />
+                    <span className="text-sm font-medium text-center">{item.label}</span>
                   </button>
                 );
               })}

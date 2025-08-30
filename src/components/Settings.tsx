@@ -28,7 +28,7 @@ export function Settings({ isOpen, onClose }: SettingsProps) {
     <>
       {/* Backdrop */}
       <div 
-        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50"
+        className="fixed inset-0 bg-background/20 backdrop-blur-sm z-50"
         onClick={onClose}
       />
       

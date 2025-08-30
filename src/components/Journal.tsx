@@ -77,27 +77,44 @@ export function Journal() {
   };
 
   return (
-    <div className="space-y-6 wellness-enter">
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold mb-2">Daily Journal</h1>
-        <p className="text-muted-foreground">Reflect, process, and grow through writing</p>
+    <div className="space-y-8 wellness-enter max-w-6xl mx-auto">
+      {/* Enhanced Header */}
+      <div className="text-center mb-12">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-accent/20 to-tertiary/20 mb-4 float">
+          <PenTool className="h-8 w-8 text-accent" />
+        </div>
+        <h1 className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-foreground via-primary to-accent bg-clip-text text-transparent">
+          Daily Journal
+        </h1>
+        <p className="text-lg text-muted-foreground font-medium max-w-2xl mx-auto">
+          Reflect, process, and grow through mindful writing. Your thoughts matter.
+        </p>
       </div>
 
-      {/* Writing Prompts */}
+      {/* Enhanced Writing Prompts */}
       {!isWriting && (
-        <Card className="p-6">
-          <h2 className="text-xl font-semibold mb-4 flex items-center">
-            <BookOpen className="h-5 w-5 mr-2 text-accent" />
+        <Card className="glass-card-intense p-8 bg-gradient-to-br from-tertiary/10 to-accent/5 border-0">
+          <h2 className="text-2xl font-bold mb-6 flex items-center">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-accent/20 to-tertiary/20 flex items-center justify-center mr-3">
+              <BookOpen className="h-5 w-5 text-accent" />
+            </div>
             Writing Prompts
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {prompts.map((prompt, index) => (
               <button
                 key={index}
                 onClick={() => usePrompt(prompt)}
-                className="p-4 text-left rounded-xl border border-border hover:border-accent/50 hover:bg-accent/5 transition-all duration-200"
+                className="glass-card p-6 text-left group hover:scale-105 transition-all duration-300 interactive-card bg-gradient-to-br from-card/40 to-card/60 border-0"
               >
-                <p className="text-sm font-medium">{prompt}</p>
+                <div className="flex items-start space-x-3">
+                  <div className="w-2 h-2 bg-gradient-to-br from-accent to-tertiary rounded-full mt-3 flex-shrink-0"></div>
+                  <p className="font-medium text-foreground group-hover:text-accent transition-colors duration-200">{prompt}</p>
+                </div>
+                <div className="mt-4 flex items-center text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                  <span>Click to start writing</span>
+                  <div className="ml-2 w-1 h-4 bg-gradient-to-b from-accent to-transparent rounded-full"></div>
+                </div>
               </button>
             ))}
           </div>

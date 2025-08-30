@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Navigation } from "@/components/Navigation";
 import { Dashboard } from "@/components/Dashboard";
-import { MoodTracker } from "@/components/MoodTracker";
+import { StressTracker } from "@/components/StressTracker";
 import { SleepTracker } from "@/components/SleepTracker";
 import { HabitTracker } from "@/components/HabitTracker";
 import { Journal } from "@/components/Journal";
@@ -15,8 +15,8 @@ const Index = () => {
     switch (activeSection) {
       case "dashboard":
         return <Dashboard onSectionChange={setActiveSection} />;
-      case "mood":
-        return <MoodTracker />;
+      case "stress":
+        return <StressTracker />;
       case "sleep":
         return <SleepTracker />;
       case "habits":
@@ -33,12 +33,12 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen gradient-background">
+    <div className="min-h-screen gradient-background noise-texture">
       <Navigation 
         activeSection={activeSection} 
         onSectionChange={setActiveSection} 
       />
-      <main className="p-4 md:p-8 pb-24">
+      <main className="p-4 md:p-6 lg:p-12 pb-32 md:pb-24">
         {renderSection()}
       </main>
     </div>

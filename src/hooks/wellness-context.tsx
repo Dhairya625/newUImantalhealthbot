@@ -1,10 +1,20 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-export type MoodId = "excellent" | "good" | "okay" | "poor" | "awful" | "";
+// TypeScript declaration for requestIdleCallback
+declare global {
+  interface Window {
+    requestIdleCallback: (
+      callback: IdleRequestCallback,
+      opts?: IdleRequestOptions
+    ) => number;
+  }
+}
 
-export interface MoodEntry {
+export type StressLevel = "very-low" | "low" | "moderate" | "high" | "very-high" | "";
+
+export interface StressEntry {
   date: string; // ISO date string
-  mood: Exclude<MoodId, "">;
+  stressLevel: Exclude<StressLevel, "">;
   note?: string;
 }
 
@@ -15,6 +25,13 @@ export interface HabitItem {
   streak: number;
   category: "mindfulness" | "health" | "reflection" | "exercise" | "learning";
   dateCompleted?: string; // ISO date string when habit was completed
+  dailyCompletions: string[]; // Array of ISO date strings for daily completions
+}
+
+export interface DailyHabitCompletion {
+  date: string; // ISO date string (YYYY-MM-DD)
+  habitIds: string[]; // Array of habit IDs completed on this date
+  totalHabits: number; // Total habits available on this date
 }
 
 export interface TodoItem {
@@ -45,25 +62,26 @@ export interface JournalEntry {
   title: string;
   content: string;
   date: string; // YYYY-MM-DD
-  mood?: Exclude<MoodId, "">;
+  stressLevel?: Exclude<StressLevel, "">;
 }
 
 interface WellnessContextValue {
-  // Mood
-  todayMood: MoodId;
-  setTodayMood: (mood: Exclude<MoodId, "">) => void;
-  moodHistory: MoodEntry[];
-  addMoodEntry: (mood: Exclude<MoodId, "">, note?: string) => void;
+  // Stress
+  todayStressLevel: StressLevel;
+  setTodayStressLevel: (stressLevel: Exclude<StressLevel, "">) => void;
+  stressHistory: StressEntry[];
+  addStressEntry: (stressLevel: Exclude<StressLevel, "">, note?: string) => void;
 
   // Habits
   habits: HabitItem[];
-  addHabit: (name: string, category?: HabitItem["category"]) => void;
+  addHabit: (name: string, category?: HabitItem["category"]) => boolean;
   toggleHabit: (id: string) => void;
   deleteHabit: (id: string) => void;
+  getDailyHabitCompletions: (days?: number) => DailyHabitCompletion[];
 
   // Todos (lightweight - also mirror into habits)
   todos: TodoItem[];
-  addTodos: (todos: Omit<TodoItem, "id" | "completed">[]) => void;
+  addTodos: (todos: Omit<TodoItem, "id" | "completed">[]) => string[];
 
   // Chat
   chatMessages: ChatMessage[];
@@ -82,15 +100,58 @@ interface WellnessContextValue {
 
 const WellnessContext = createContext<WellnessContextValue | undefined>(undefined);
 
-const initialHabits: HabitItem[] = [];
+const initialHabits: HabitItem[] = [
+  {
+    id: "1",
+    name: "Morning Meditation",
+    completed: false,
+    streak: 5,
+    category: "mindfulness",
+    dailyCompletions: [
+      new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+      new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+      new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+      new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+      new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+    ]
+  },
+  {
+    id: "2",
+    name: "Daily Exercise",
+    completed: false,
+    streak: 3,
+    category: "exercise",
+    dailyCompletions: [
+      new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+      new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+      new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+    ]
+  },
+  {
+    id: "3",
+    name: "Journal Writing",
+    completed: false,
+    streak: 7,
+    category: "reflection",
+    dailyCompletions: [
+      new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+      new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+      new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+      new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+      new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+      new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+      new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+    ]
+  }
+];
 
-const initialMoodHistory: MoodEntry[] = [
-  { date: new Date().toISOString().slice(0, 10), mood: "good", note: "Had a productive day at work" },
+const initialStressHistory: StressEntry[] = [
+  { date: new Date().toISOString().slice(0, 10), stressLevel: "moderate", note: "Had a productive day at work" },
 ];
 
 export function WellnessProvider({ children }: { children: React.ReactNode }) {
-  const [todayMood, setTodayMoodState] = useState<MoodId>("");
-  const [moodHistory, setMoodHistory] = useState<MoodEntry[]>(initialMoodHistory);
+  const [todayStressLevel, setTodayStressLevelState] = useState<StressLevel>("");
+  const [stressHistory, setStressHistory] = useState<StressEntry[]>(initialStressHistory);
   const [habits, setHabits] = useState<HabitItem[]>(initialHabits);
   const [todos, setTodos] = useState<TodoItem[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
@@ -139,31 +200,99 @@ export function WellnessProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   }, []);
 
-  const setTodayMood = (mood: Exclude<MoodId, "">) => {
-    setTodayMoodState(mood);
+  // Hydrate stress data from localStorage once on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("pp_stress_history");
+      if (raw) {
+        const parsed = JSON.parse(raw) as StressEntry[];
+        if (Array.isArray(parsed)) setStressHistory(parsed);
+      }
+      const todayStress = localStorage.getItem("pp_today_stress_level");
+      if (todayStress) {
+        setTodayStressLevelState(todayStress as StressLevel);
+      }
+    } catch {}
+  }, []);
+
+  const setTodayStressLevel = (stressLevel: Exclude<StressLevel, "">) => {
+    setTodayStressLevelState(stressLevel);
   };
 
-  const addMoodEntry = (mood: Exclude<MoodId, "">, note?: string) => {
-    const entry: MoodEntry = {
+  const addStressEntry = (stressLevel: Exclude<StressLevel, "">, note?: string) => {
+    const entry: StressEntry = {
       date: new Date().toISOString(),
-      mood,
+      stressLevel,
       note,
     };
-    setMoodHistory((prev) => [entry, ...prev]);
-    setTodayMoodState(mood);
+    setStressHistory((prev) => [entry, ...prev]);
+    setTodayStressLevelState(stressLevel);
   };
 
-  const addHabit = (name: string, category: HabitItem["category"] = "health") => {
-    const exists = habits.some((h) => h.name.toLowerCase() === name.toLowerCase());
-    if (exists) return;
+  const addHabit = (name: string, category: HabitItem["category"] = "health"): boolean => {
+    // Enhanced deduplication logic
+    const normalizedName = name.toLowerCase().trim();
+    
+    // Check for exact matches first
+    const exactExists = habits.some((h) => h.name.toLowerCase().trim() === normalizedName);
+    if (exactExists) return false;
+    
+    // Check for similar habits using improved similarity detection
+    const similarExists = habits.some((h) => {
+      const habitName = h.name.toLowerCase().trim();
+      
+      // Direct similarity checks
+      if (habitName === normalizedName) return true;
+      
+      // Check for common variations and synonyms
+      const variations = [
+        // Reading variations
+        { from: /^read(ing)?\s+(a\s+)?book/, to: /^read(ing)?\s+(a\s+)?book/ },
+        { from: /^walk(ing)?/, to: /^walk(ing)?/ },
+        { from: /^meditat(ion|ing)?/, to: /^meditat(ion|ing)?/ },
+        { from: /^journal(ing)?/, to: /^journal(ing)?/ },
+        { from: /^breath(ing)?/, to: /^breath(ing)?/ },
+        { from: /^hydrat(e|ing)?/, to: /^hydrat(e|ing)?/ },
+        { from: /^exercis(e|ing)?/, to: /^exercis(e|ing)?/ },
+        { from: /^learn(ing)?/, to: /^learn(ing)?/ },
+      ];
+      
+      // Check if both names match the same variation pattern
+      for (const variation of variations) {
+        if (variation.from.test(normalizedName) && variation.to.test(habitName)) {
+          return true;
+        }
+      }
+      
+      // Check for word overlap (if more than 70% of words match)
+      const nameWords = normalizedName.split(/\s+/).filter(w => w.length > 2);
+      const habitWords = habitName.split(/\s+/).filter(w => w.length > 2);
+      
+      if (nameWords.length > 0 && habitWords.length > 0) {
+        const commonWords = nameWords.filter(word => 
+          habitWords.some(habitWord => 
+            habitWord.includes(word) || word.includes(habitWord)
+          )
+        );
+        const similarity = commonWords.length / Math.max(nameWords.length, habitWords.length);
+        if (similarity > 0.7) return true;
+      }
+      
+      return false;
+    });
+    
+    if (similarExists) return false;
+    
     const newHabit: HabitItem = {
       id: Date.now().toString() + Math.random().toString(36).slice(2),
       name,
       completed: false,
       streak: 0,
       category,
+      dailyCompletions: [],
     };
     setHabits((prev) => [...prev, newHabit]);
+    return true;
   };
 
   const toggleHabit = (id: string) => {
@@ -175,6 +304,7 @@ export function WellnessProvider({ children }: { children: React.ReactNode }) {
               completed: !habit.completed,
               streak: habit.completed ? habit.streak : habit.streak + 1,
               dateCompleted: !habit.completed ? new Date().toISOString().slice(0, 10) : undefined,
+              dailyCompletions: habit.completed ? habit.dailyCompletions : [...habit.dailyCompletions, new Date().toISOString().slice(0, 10)],
             }
           : habit
       )
@@ -183,6 +313,30 @@ export function WellnessProvider({ children }: { children: React.ReactNode }) {
 
   const deleteHabit = (id: string) => {
     setHabits((prev) => prev.filter((h) => h.id !== id));
+  };
+
+  // Get daily habit completion data for streak bar
+  const getDailyHabitCompletions = (days: number = 30): DailyHabitCompletion[] => {
+    const today = new Date();
+    const completions: DailyHabitCompletion[] = [];
+    
+    for (let i = days - 1; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const dateString = date.toISOString().slice(0, 10);
+      
+      const completedHabits = habits.filter(h => 
+        h.dailyCompletions.includes(dateString)
+      );
+      
+      completions.push({
+        date: dateString,
+        habitIds: completedHabits.map(h => h.id),
+        totalHabits: habits.length
+      });
+    }
+    
+    return completions;
   };
 
   const addTodos = (items: Omit<TodoItem, "id" | "completed">[]) => {
@@ -194,34 +348,23 @@ export function WellnessProvider({ children }: { children: React.ReactNode }) {
     }));
     setTodos((prev) => [...withIds, ...prev]);
 
-    // Mirror todos into habits list automatically
-    withIds.forEach((t) => addHabit(t.title, t.category));
+    // Mirror todos into habits list automatically, but only add new ones
+    const newHabitsAdded: string[] = [];
+    withIds.forEach((t) => {
+      const wasAdded = addHabit(t.title, t.category);
+      if (wasAdded) {
+        newHabitsAdded.push(t.title);
+      }
+    });
+    
+    return newHabitsAdded; // Return list of actually added habits
   };
 
   const addChatMessage = (message: ChatMessage) => {
     setChatMessages((prev) => [...prev, message]);
   };
 
-  // Persist chat to localStorage whenever it changes
-  useEffect(() => {
-    try {
-      localStorage.setItem("pp_chat_messages", JSON.stringify(chatMessages));
-    } catch {}
-  }, [chatMessages]);
 
-  // Persist sleep to localStorage whenever it changes
-  useEffect(() => {
-    try {
-      localStorage.setItem("pp_sleep_entries", JSON.stringify(sleepEntries));
-    } catch {}
-  }, [sleepEntries]);
-
-  // Persist journal to localStorage whenever it changes
-  useEffect(() => {
-    try {
-      localStorage.setItem("pp_journal_entries", JSON.stringify(journalEntries));
-    } catch {}
-  }, [journalEntries]);
 
   const addSleepEntry = (entry: Omit<SleepEntry, "id">) => {
     const id = Date.now().toString() + Math.random().toString(36).slice(2);
@@ -251,15 +394,62 @@ export function WellnessProvider({ children }: { children: React.ReactNode }) {
     setJournalEntries((prev) => prev.filter((entry) => entry.id !== id));
   };
 
+  // Optimized localStorage persistence with batching and error handling
+  useEffect(() => {
+    const persistData = () => {
+      try {
+        // Batch localStorage operations
+        const dataToPersist = {
+          pp_chat_messages: chatMessages,
+          pp_sleep_entries: sleepEntries,
+          pp_journal_entries: journalEntries,
+          pp_habits: habits,
+          pp_todos: todos,
+          pp_stress_history: stressHistory,
+          pp_today_stress_level: todayStressLevel
+        };
+        
+        // Use requestIdleCallback for non-blocking persistence
+        if (window.requestIdleCallback) {
+          window.requestIdleCallback(() => {
+            Object.entries(dataToPersist).forEach(([key, value]) => {
+              try {
+                localStorage.setItem(key, JSON.stringify(value));
+              } catch (err) {
+                console.warn(`Failed to persist ${key}:`, err);
+              }
+            });
+          });
+        } else {
+          // Fallback for browsers without requestIdleCallback
+          Object.entries(dataToPersist).forEach(([key, value]) => {
+            try {
+              localStorage.setItem(key, JSON.stringify(value));
+            } catch (err) {
+              console.warn(`Failed to persist ${key}:`, err);
+            }
+          });
+        }
+      } catch (err) {
+        console.warn('Failed to persist wellness data:', err);
+      }
+    };
+    
+    // Debounce persistence to avoid excessive writes
+    const timeoutId = setTimeout(persistData, 100);
+    return () => clearTimeout(timeoutId);
+          }, [chatMessages, sleepEntries, journalEntries, habits, todos, stressHistory, todayStressLevel]);
+
   const value = useMemo<WellnessContextValue>(() => ({
-    todayMood,
-    setTodayMood,
-    moodHistory,
-    addMoodEntry,
+    todayStressLevel,
+    setTodayStressLevel,
+    stressHistory,
+    addStressEntry,
     habits,
     addHabit,
     toggleHabit,
     deleteHabit,
+    getDailyHabitCompletions,
     todos,
     addTodos,
     chatMessages,
@@ -270,7 +460,7 @@ export function WellnessProvider({ children }: { children: React.ReactNode }) {
     addJournalEntry,
     updateJournalEntry,
     deleteJournalEntry,
-  }), [todayMood, moodHistory, habits, todos, chatMessages, sleepEntries, journalEntries]);
+  }), [todayStressLevel, stressHistory, habits, todos, chatMessages, sleepEntries, journalEntries]);
 
   return <WellnessContext.Provider value={value}>{children}</WellnessContext.Provider>;
 }
