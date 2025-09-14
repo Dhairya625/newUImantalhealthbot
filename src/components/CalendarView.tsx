@@ -6,90 +6,272 @@ import {
   ChevronRight, 
   Calendar as CalendarIcon, 
   CheckCircle, 
-  Circle,
-  BookText, // New icon for journal
-  PlusCircle // New icon for adding entries
+  BookText,
+  PlusCircle,
+  CircleDotDashed, // Icon for in-progress
+  Dot, // Icon for journal entry
+  Brain, // Icon for stress
+  Moon, // Icon for sleep
+  Target, // Icon for tasks
+  Bot // Icon for AI suggestions
 } from "lucide-react";
 import { useWellness } from "@/hooks/wellness-context";
-import { cn } from "@/lib/utils"; // Assuming you have a utility for classnames
+import { cn } from "@/lib/utils"; 
 
-// NOTE: You would need to add a 'cn' utility function if you don't have one.
-// It's standard in shadcn/ui projects. Example:
-// import { type ClassValue, clsx } from "clsx"
-// import { twMerge } from "tailwind-merge"
-// export function cn(...inputs: ClassValue[]) { return twMerge(clsx(inputs)) }
+// Stress level configuration (matching StressTracker)
+const stressOptions = [
+  { id: "very-low", label: "Very Low", emoji: "😌", value: 1, color: "text-green-500" },
+  { id: "low", label: "Low", emoji: "🙂", value: 2, color: "text-sky-500" },
+  { id: "moderate", label: "Moderate", emoji: "😐", value: 3, color: "text-yellow-500" },
+  { id: "high", label: "High", emoji: "😰", value: 4, color: "text-orange-500" },
+  { id: "very-high", label: "Very High", emoji: "😱", value: 5, color: "text-red-500" },
+];
 
-interface JournalEntry {
-  id: string;
-  title: string;
-  content: string;
-}
+// Sleep quality configuration
+const sleepQualityOptions = [
+  { value: "excellent", label: "Excellent", emoji: "🤩", color: "text-green-500" },
+  { value: "good", label: "Good", emoji: "😊", color: "text-blue-500" },
+  { value: "fair", label: "Fair", emoji: "😐", color: "text-yellow-500" },
+  { value: "poor", label: "Poor", emoji: "😴", color: "text-red-500" },
+];
 
-interface HabitLog {
-  id: string;
-  name:string;
-  completed: boolean;
-  category: string;
-}
-
+// Data structure for calendar days
 interface DayData {
   date: number;
   isToday: boolean;
-  isCurrentMonth: boolean;
-  journalEntries: JournalEntry[];
-  habits: HabitLog[];
+  journalEntries: any[];
+  habits: any[];
   habitsCompleted: number;
-  totalHabitsForDay: number; // Assuming habits can be different per day
-}
+  totalHabitsForDay: number;
+  stressEntries: any[];
+  sleepEntries: any[];
+  todos: any[];
+  chatSuggestions: any[];
+} 
 
-const stressEmojis = {
-  "very-low": "😌",
-  "low": "🙂", 
-  "moderate": "😐",
-  "high": "😰",
-  "very-high": "😱"
+// --- Helper Component: Habit Progress Ring ---
+const HabitProgressRing = ({ completed, total }: { completed: number; total: number }) => {
+  if (total === 0) return null;
+
+  const percentage = (completed / total) * 100;
+  const circumference = 2 * Math.PI * 12; // 2 * pi * radius
+  const offset = circumference - (percentage / 100) * circumference;
+
+  let strokeColor = "text-muted-foreground/50"; // Default/incomplete
+  if (percentage > 0 && percentage < 100) strokeColor = "text-yellow-500"; // In progress
+  if (percentage === 100) strokeColor = "text-green-500"; // Completed
+
+  return (
+    <div className="relative h-7 w-7">
+      <svg className="w-full h-full" viewBox="0 0 30 30">
+        <circle
+          className="text-muted/20"
+          strokeWidth="3"
+          stroke="currentColor"
+          fill="transparent"
+          r="12"
+          cx="15"
+          cy="15"
+        />
+        <circle
+          className={cn("transition-all duration-500", strokeColor)}
+          strokeWidth="3"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          stroke="currentColor"
+          fill="transparent"
+          r="12"
+          cx="15"
+          cy="15"
+          transform="rotate(-90 15 15)"
+        />
+      </svg>
+      {percentage === 100 && <CheckCircle className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-4 w-4 text-green-500" />}
+    </div>
+  );
 };
 
-// --- New Component: Day Details Sidebar ---
+
+// --- Component: Day Details Sidebar ---
 const DayDetailsSidebar = ({ dayData, monthName, year }: { dayData: DayData | null; monthName: string; year: number }) => {
   if (!dayData) {
     return (
-      <Card className="h-full flex flex-col items-center justify-center p-6 text-center">
-        <CalendarIcon className="h-12 w-12 text-muted-foreground/50 mb-4" />
-        <h3 className="text-lg font-medium text-muted-foreground">Select a day</h3>
-        <p className="text-sm text-muted-foreground">Click on a date in the calendar to see its details.</p>
+      <Card className="h-full flex flex-col items-center justify-center p-6 text-center bg-muted/20 border-dashed transition-all duration-300">
+        <CalendarIcon className="h-16 w-16 text-muted-foreground/30 mb-4 transition-transform duration-300 group-hover:scale-110" />
+        <h3 className="text-xl font-semibold text-muted-foreground">Select a Day</h3>
+        <p className="text-sm text-muted-foreground/80 mt-1">Click on a date to view your wellness log.</p>
       </Card>
     );
   }
 
-  const { date, journalEntries, habits, habitsCompleted, totalHabitsForDay } = dayData;
-  const hasData = journalEntries.length > 0 || habits.length > 0;
+  const { 
+    date, 
+    journalEntries, 
+    habits, 
+    habitsCompleted, 
+    totalHabitsForDay, 
+    stressEntries, 
+    sleepEntries, 
+    todos, 
+    chatSuggestions 
+  } = dayData;
+  
+  const hasData = journalEntries.length > 0 || 
+                  totalHabitsForDay > 0 || 
+                  stressEntries.length > 0 || 
+                  sleepEntries.length > 0 || 
+                  todos.length > 0 || 
+                  chatSuggestions.length > 0;
 
   return (
-    <Card className="h-full flex flex-col">
-      <CardHeader className="border-b">
-        <CardTitle className="text-xl font-bold">
+    <Card className="h-full flex flex-col animate-in fade-in-50 duration-500">
+      <CardHeader className="border-b bg-muted/30">
+        <CardTitle className="text-2xl font-bold tracking-tight">
           {monthName} {date}, {year}
         </CardTitle>
-        <p className="text-sm text-muted-foreground">
-          {totalHabitsForDay > 0 ? `${habitsCompleted} of ${totalHabitsForDay} habits completed` : "No habits tracked for this day."}
-        </p>
+        <div className="text-sm text-muted-foreground space-y-1">
+          {totalHabitsForDay > 0 && (
+            <p>{habitsCompleted} of {totalHabitsForDay} habits completed</p>
+          )}
+          {stressEntries.length > 0 && (
+            <p>{stressEntries.length} stress log{stressEntries.length > 1 ? 's' : ''}</p>
+          )}
+          {sleepEntries.length > 0 && (
+            <p>{sleepEntries.length} sleep log{sleepEntries.length > 1 ? 's' : ''}</p>
+          )}
+          {(todos.length + chatSuggestions.length) > 0 && (
+            <p>{todos.length + chatSuggestions.length} task{(todos.length + chatSuggestions.length) > 1 ? 's' : ''}</p>
+          )}
+        </div>
       </CardHeader>
-      <CardContent className="p-6 flex-grow overflow-y-auto">
+      
+      {/* Added a key here to force re-animation on day change */}
+      <CardContent key={date} className="p-6 flex-grow overflow-y-auto animate-in fade-in-50 duration-500">
         {hasData ? (
-          <div className="space-y-6">
+          <div className="space-y-8">
             {/* Journal Entries Section */}
             {journalEntries.length > 0 && (
-              <div className="space-y-3">
-                <h4 className="text-base font-semibold tracking-tight flex items-center">
-                  <BookText className="h-4 w-4 mr-2" />
-                  Journal Entries
+              <div>
+                <h4 className="text-lg font-semibold tracking-tight flex items-center mb-3">
+                  <BookText className="h-5 w-5 mr-3 text-primary" />
+                  Journal ({journalEntries.length})
                 </h4>
                 <div className="space-y-3">
                   {journalEntries.map(entry => (
-                    <div key={entry.id} className="p-3 rounded-lg border bg-background/50">
-                      <p className="font-medium text-sm truncate">{entry.title}</p>
-                      <p className="text-xs text-muted-foreground line-clamp-2">{entry.content}</p>
+                    <div key={entry.id} className="p-4 rounded-lg border bg-background hover:bg-muted/50 transition-colors duration-200 cursor-pointer">
+                      <p className="font-semibold text-sm">{entry.title}</p>
+                      <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{entry.content}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Stress Entries Section */}
+            {stressEntries.length > 0 && (
+              <div>
+                <h4 className="text-lg font-semibold tracking-tight flex items-center mb-3">
+                  <Brain className="h-5 w-5 mr-3 text-orange-500" />
+                  Stress Logs ({stressEntries.length})
+                </h4>
+                <div className="space-y-3">
+                  {stressEntries.map(entry => {
+                    const stressData = stressOptions.find(s => s.id === entry.stressLevel);
+                    const isAutoDetected = entry.note && entry.note.includes('Auto-detected from chat');
+                    return (
+                      <div key={entry.id} className={`p-4 rounded-lg border transition-colors duration-200 ${
+                        isAutoDetected ? 'border-primary/50 bg-primary/5' : 'bg-background hover:bg-muted/50'
+                      }`}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-2xl">{stressData?.emoji}</span>
+                          <span className="font-semibold text-sm">{stressData?.label}</span>
+                          {isAutoDetected && (
+                            <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded-full">
+                              AI Detected
+                            </span>
+                          )}
+                        </div>
+                        {entry.note && (
+                          <p className="text-xs text-muted-foreground line-clamp-2">
+                            {entry.note.replace('Auto-detected from chat: ', '')}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            
+            {/* Sleep Entries Section */}
+            {sleepEntries.length > 0 && (
+              <div>
+                <h4 className="text-lg font-semibold tracking-tight flex items-center mb-3">
+                  <Moon className="h-5 w-5 mr-3 text-blue-500" />
+                  Sleep Logs ({sleepEntries.length})
+                </h4>
+                <div className="space-y-3">
+                  {sleepEntries.map(entry => {
+                    const qualityData = sleepQualityOptions.find(q => q.value === entry.quality);
+                    return (
+                      <div key={entry.id} className="p-4 rounded-lg border bg-background hover:bg-muted/50 transition-colors duration-200">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-2xl">{qualityData?.emoji}</span>
+                          <span className="font-semibold text-sm">{qualityData?.label}</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {entry.bedtime && entry.wakeupTime && (
+                            <p>Sleep: {entry.bedtime} - {entry.wakeupTime}</p>
+                          )}
+                          {entry.duration && <p>Duration: {entry.duration} hours</p>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            
+            {/* Tasks Section (Todos + Chat Suggestions) */}
+            {(todos.length > 0 || chatSuggestions.length > 0) && (
+              <div>
+                <h4 className="text-lg font-semibold tracking-tight flex items-center mb-3">
+                  <Target className="h-5 w-5 mr-3 text-green-500" />
+                  Tasks ({todos.length + chatSuggestions.length})
+                </h4>
+                <div className="space-y-2">
+                  {todos.map(todo => (
+                    <div key={todo.id} className="flex items-center space-x-3 p-3 text-sm rounded-lg border bg-background hover:bg-muted/50 transition-colors duration-200">
+                      {todo.completed ? (
+                        <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
+                      ) : (
+                        <CircleDotDashed className="h-4 w-4 text-muted-foreground/70 flex-shrink-0" />
+                      )}
+                      <span className={cn("flex-grow", todo.completed && 'line-through text-muted-foreground')}>
+                        {todo.title}
+                      </span>
+                      <span className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground">
+                        {todo.category}
+                      </span>
+                    </div>
+                  ))}
+                  {chatSuggestions.map(suggestion => (
+                    <div key={suggestion.id} className="flex items-center space-x-3 p-3 text-sm rounded-lg border border-dashed border-primary/40 bg-primary/5 transition-colors duration-200">
+                      {suggestion.completed ? (
+                        <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
+                      ) : (
+                        <CircleDotDashed className="h-4 w-4 text-muted-foreground/70 flex-shrink-0" />
+                      )}
+                      <span className={cn("flex-grow", suggestion.completed && 'line-through text-muted-foreground')}>
+                        {suggestion.name}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <Bot className="h-3 w-3 text-primary" />
+                        <span className="text-xs px-2 py-1 rounded-full bg-primary/20 text-primary">
+                          AI Suggested
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -98,23 +280,23 @@ const DayDetailsSidebar = ({ dayData, monthName, year }: { dayData: DayData | nu
             
             {/* Habits Section */}
             {habits.length > 0 && (
-              <div className="space-y-3">
-                <h4 className="text-base font-semibold tracking-tight flex items-center">
-                   <CheckCircle className="h-4 w-4 mr-2" />
-                   Habits
+              <div>
+                <h4 className="text-lg font-semibold tracking-tight flex items-center mb-3">
+                   <CheckCircle className="h-5 w-5 mr-3 text-primary" />
+                   Daily Habits ({habits.length})
                 </h4>
                 <div className="space-y-2">
                   {habits.map(habit => (
-                    <div key={habit.id} className="flex items-center space-x-3 p-2 text-sm rounded-md border bg-background/50">
+                    <div key={habit.id} className="flex items-center space-x-3 p-3 text-sm rounded-lg border bg-background hover:bg-muted/50 transition-colors duration-200">
                       {habit.completed ? (
-                        <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
+                        <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
                       ) : (
-                        <Circle className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        <CircleDotDashed className="h-5 w-5 text-muted-foreground/70 flex-shrink-0" />
                       )}
                       <span className={cn("flex-grow", habit.completed && 'line-through text-muted-foreground')}>
                         {habit.name}
                       </span>
-                       <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground whitespace-nowrap">
+                       <span className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground whitespace-nowrap font-medium">
                         {habit.category}
                       </span>
                     </div>
@@ -125,12 +307,12 @@ const DayDetailsSidebar = ({ dayData, monthName, year }: { dayData: DayData | nu
           </div>
         ) : (
           <div className="text-center h-full flex flex-col justify-center items-center">
-            <BookText className="h-10 w-10 text-muted-foreground/50 mb-4" />
-            <h3 className="text-md font-medium">No Entries</h3>
-            <p className="text-sm text-muted-foreground mb-4">You have no journal or habit entries for this day.</p>
-            <Button variant="outline" size="sm">
+            <CalendarIcon className="h-12 w-12 text-muted-foreground/30 mb-4" />
+            <h3 className="text-lg font-medium">No Logged Activity</h3>
+            <p className="text-sm text-muted-foreground mb-6 max-w-xs">You haven't logged any wellness data for this day.</p>
+            <Button variant="outline">
               <PlusCircle className="h-4 w-4 mr-2" />
-              Add Entry
+              Add Today's Entry
             </Button>
           </div>
         )}
@@ -143,154 +325,207 @@ const DayDetailsSidebar = ({ dayData, monthName, year }: { dayData: DayData | nu
 // --- Main CalendarView Component ---
 export function CalendarView() {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
+  const [selectedDate, setSelectedDate] = useState(new Date());
   
-  const { journalEntries, habits } = useWellness();
+  const { 
+    journalEntries = [], 
+    habits = [], 
+    stressEntries = [], 
+    sleepEntries = [], 
+    todos = [], 
+    chatSuggestions = [] 
+  } = useWellness();
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
-  const monthNames = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
-  ];
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
   const firstDayOfMonth = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
   const goToPreviousMonth = () => setCurrentDate(new Date(year, month - 1, 1));
   const goToNextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
-  
-  const handleDayClick = (day: number) => {
-    setSelectedDate(new Date(year, month, day));
+  const goToToday = () => {
+    const today = new Date();
+    setCurrentDate(today);
+    setSelectedDate(today);
   };
   
-  // Set selected date to today on initial mount
-  useEffect(() => {
-    setSelectedDate(new Date());
-  }, []);
-
+  const handleDayClick = (day: number) => setSelectedDate(new Date(year, month, day));
+  
   const calendarData = useMemo(() => {
-    const data: Map<number, DayData> = new Map();
-    
-    // In a real app, you might fetch habits relevant for this month.
-    // For this example, we'll assume `habits` from context contains all habit definitions.
-    const totalHabitDefinitions = habits.length;
-
+    const data = new Map<number, DayData>();
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(year, month, day);
-      const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const dateString = date.toISOString().split('T')[0];
       
-      const dayJournalEntries = journalEntries.filter(e => e.date.startsWith(dateString));
+      // Journal entries for this day
+      const dayJournalEntries = journalEntries.filter(e => 
+        e.date && e.date.startsWith(dateString)
+      );
       
-      // This logic needs to be adapted based on how your habits are stored.
-      // Assuming `habits` are logs, not definitions.
-      const dayHabits = habits.filter(h => h.dateCompleted === dateString);
+      // Habits for this day (since habits don't have dateCompleted, we'll show all current habits)
+      const dayHabits = habits.filter(h => {
+        // For now, show all active habits since we don't track daily completion dates
+        // In a real implementation, you'd want to track daily habit completions
+        return true;
+      });
       const habitsCompleted = dayHabits.filter(h => h.completed).length;
+      
+      // Stress entries for this day
+      const dayStressEntries = stressEntries.filter(e => {
+        const entryDate = e.date || e.timestamp;
+        return entryDate && entryDate.startsWith(dateString);
+      });
+      
+      // Sleep entries for this day
+      const daySleepEntries = sleepEntries.filter(e => 
+        e.date && e.date.startsWith(dateString)
+      );
+      
+      // Todos for this day
+      const dayTodos = todos.filter(t => 
+        t.createdAt && t.createdAt.startsWith(dateString)
+      );
+      
+      // Chat suggestions for this day
+      const dayChatSuggestions = chatSuggestions.filter(s => 
+        s.createdAt && s.createdAt.startsWith(dateString)
+      );
 
       data.set(day, {
         date: day,
         isToday: date.toDateString() === new Date().toDateString(),
-        isCurrentMonth: true, // Placeholder
         journalEntries: dayJournalEntries,
         habits: dayHabits,
         habitsCompleted: habitsCompleted,
-        totalHabitsForDay: dayHabits.length // Or total definitions if you track all
+        totalHabitsForDay: dayHabits.length,
+        stressEntries: dayStressEntries,
+        sleepEntries: daySleepEntries,
+        todos: dayTodos,
+        chatSuggestions: dayChatSuggestions
       });
     }
     return data;
-  }, [journalEntries, habits, year, month, daysInMonth]);
+  }, [journalEntries, habits, stressEntries, sleepEntries, todos, chatSuggestions, year, month, daysInMonth]);
 
   const selectedDayData = selectedDate && selectedDate.getMonth() === month && selectedDate.getFullYear() === year
     ? calendarData.get(selectedDate.getDate()) || null
     : null;
 
   return (
-    <div className="space-y-6 wellness-enter p-4 md:p-6 lg:p-8">
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold tracking-tight mb-1">Calendar Overview</h1>
-        <p className="text-muted-foreground">Track your wellness journey over time.</p>
+    <div className="wellness-enter max-w-7xl mx-auto p-4 md:p-6 lg:p-8 space-y-8">
+      <div className="text-center animate-in fade-in-50 duration-500">
+        <h1 className="text-4xl md:text-5xl font-bold tracking-tight bg-gradient-to-br from-primary to-secondary-foreground/80 bg-clip-text text-transparent">
+          My Wellness Calendar
+        </h1>
+        <p className="text-muted-foreground mt-2 max-w-2xl mx-auto">A complete overview of your journal entries and habit progression.</p>
       </div>
       
-      {/* Main Responsive Layout: 1 column on mobile, 2 on desktop */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-
+      <div className="grid grid-cols-1 lg:grid-cols-[350px_1fr] gap-6 lg:gap-8">
         {/* --- Left Column: Day Details Sidebar --- */}
-        <div className="lg:col-span-1">
-          <DayDetailsSidebar 
-            dayData={selectedDayData}
-            monthName={monthNames[month]}
-            year={year}
-          />
+        <div className="lg:col-span-1 animate-in fade-in-50 slide-in-from-left-4 duration-700 delay-200">
+          <DayDetailsSidebar dayData={selectedDayData} monthName={monthNames[month]} year={year} />
         </div>
 
         {/* --- Right Column: Calendar Grid --- */}
-        <div className="lg:col-span-2">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <h2 className="text-2xl font-semibold">
-                {monthNames[month]} {year}
-              </h2>
-              <div className="flex space-x-2">
-                <Button onClick={goToPreviousMonth} variant="outline" size="icon">
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button onClick={goToNextMonth} variant="outline" size="icon">
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
+        <div className="lg:col-span-1 animate-in fade-in-50 slide-in-from-right-4 duration-700 delay-200">
+          <Card className="overflow-hidden">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <h2 className="text-2xl font-bold">{monthNames[month]} {year}</h2>
+              <div className="flex items-center space-x-2">
+                <Button onClick={goToToday} variant="outline" size="sm">Today</Button>
+                <div className="flex space-x-1">
+                  <Button onClick={goToPreviousMonth} variant="outline" size="icon"><ChevronLeft className="h-4 w-4" /></Button>
+                  <Button onClick={goToNextMonth} variant="outline" size="icon"><ChevronRight className="h-4 w-4" /></Button>
+                </div>
               </div>
             </CardHeader>
 
             <CardContent>
-              <div className="grid grid-cols-7 gap-1 text-center text-sm font-medium text-muted-foreground border-b pb-2 mb-2">
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => <div key={day}>{day}</div>)}
+              <div className="grid grid-cols-7 gap-1 text-center text-sm font-semibold text-muted-foreground border-b pb-2 mb-2">
+                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(day => <div key={day}>{day}</div>)}
               </div>
-              <div className="grid grid-cols-7 gap-1">
-                {/* Empty cells for days before month starts */}
+              <div className="grid grid-cols-7 gap-2">
                 {Array.from({ length: firstDayOfMonth }).map((_, i) => <div key={`empty-${i}`} />)}
 
-                {/* Day cells */}
                 {Array.from({ length: daysInMonth }).map((_, i) => {
                   const day = i + 1;
                   const dayData = calendarData.get(day);
                   if (!dayData) return null;
 
                   const isSelected = selectedDate?.getDate() === day && selectedDate?.getMonth() === month;
-                  const firstJournal = dayData.journalEntries[0];
+                  
+                  // Get stress level for the day (latest entry)
+                  const latestStressEntry = dayData.stressEntries.length > 0 
+                    ? dayData.stressEntries[dayData.stressEntries.length - 1] 
+                    : null;
+                  const stressData = latestStressEntry 
+                    ? stressOptions.find(s => s.id === latestStressEntry.stressLevel) 
+                    : null;
+                  
+                  // Get sleep quality for the day (latest entry)
+                  const latestSleepEntry = dayData.sleepEntries.length > 0 
+                    ? dayData.sleepEntries[dayData.sleepEntries.length - 1] 
+                    : null;
+                  const sleepData = latestSleepEntry 
+                    ? sleepQualityOptions.find(q => q.value === latestSleepEntry.quality) 
+                    : null;
+                  
+                  // Calculate total tasks for the day
+                  const totalTasks = dayData.todos.length + dayData.chatSuggestions.length;
 
                   return (
                     <button
                       key={day}
                       onClick={() => handleDayClick(day)}
                       className={cn(
-                        "relative flex flex-col items-start p-2 h-24 rounded-lg border text-sm text-left transition-colors duration-200",
-                        "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
-                        dayData.isToday ? "border-primary/60 bg-primary/5" : "border-transparent hover:bg-muted",
-                        isSelected ? "bg-primary/10 border-primary" : ""
+                        "relative flex flex-col items-center justify-between p-2 h-32 rounded-lg border text-sm text-left transition-all duration-300 ease-in-out",
+                        "transform hover:-translate-y-1 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary focus:z-10",
+                        dayData.isToday ? "border-primary/60 bg-primary/5 font-bold" : "border-transparent hover:bg-muted",
+                        isSelected ? "bg-primary/10 border-primary shadow-md" : ""
                       )}
                     >
-                      <span className={cn(
-                        "font-medium", 
-                        dayData.isToday ? "text-primary" : "text-foreground"
-                      )}>{day}</span>
+                      <span className={cn("self-start font-medium", dayData.isToday && "text-primary")}>{day}</span>
                       
-                      <div className="mt-1 space-y-1 w-full overflow-hidden">
-                        {firstJournal && (
-                          <div className="flex items-center space-x-1.5 text-xs text-muted-foreground">
-                            <BookText className="h-3 w-3 flex-shrink-0" />
-                            <p className="truncate">{firstJournal.title}</p>
+                      <div className="flex flex-col items-center justify-center gap-1 flex-grow">
+                        {/* Journal indicator */}
+                        {dayData.journalEntries.length > 0 && (
+                          <div className="flex items-center gap-1">
+                            <BookText className="h-3 w-3 text-blue-500" />
+                            <span className="text-xs">{dayData.journalEntries.length}</span>
                           </div>
                         )}
-                        {dayData.totalHabitsForDay > 0 && (
-                          <div className="flex items-center space-x-1.5 text-xs text-muted-foreground">
-                             {dayData.habitsCompleted === dayData.totalHabitsForDay ? (
-                                <CheckCircle className="h-3 w-3 text-green-500" />
-                              ) : (
-                                <Circle className="h-3 w-3" />
-                              )}
-                              <p>{dayData.habitsCompleted}/{dayData.totalHabitsForDay} habits</p>
+                        
+                        {/* Stress indicator */}
+                        {stressData && (
+                          <div className="flex items-center gap-1">
+                            <Brain className="h-3 w-3 text-orange-500" />
+                            <span className="text-xs">{stressData.emoji}</span>
                           </div>
                         )}
+                        
+                        {/* Sleep indicator */}
+                        {sleepData && (
+                          <div className="flex items-center gap-1">
+                            <Moon className="h-3 w-3 text-blue-600" />
+                            <span className="text-xs">{sleepData.emoji}</span>
+                          </div>
+                        )}
+                        
+                        {/* Tasks indicator */}
+                        {totalTasks > 0 && (
+                          <div className="flex items-center gap-1">
+                            <Target className="h-3 w-3 text-green-500" />
+                            <span className="text-xs">{totalTasks}</span>
+                          </div>
+                        )}
+                        
+                        {/* Habit progress ring */}
+                        <HabitProgressRing completed={dayData.habitsCompleted} total={dayData.totalHabitsForDay} />
                       </div>
+                      
+                      <div className="h-2"></div>
                     </button>
                   );
                 })}

@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Moon, Sun, Clock, TrendingUp } from "lucide-react";
+import { Moon, Sun, Clock, TrendingUp, Smile, Frown, Meh, Star } from "lucide-react";
+import { TimePicker } from "@/components/TimePicker";
 import { useWellness } from "@/hooks/wellness-context";
 import {
   ChartContainer,
@@ -16,26 +16,25 @@ import {
   CartesianGrid,
   XAxis,
   YAxis,
+  Area,
+  ResponsiveContainer,
 } from "recharts";
-
-const sleepData: never[] = [];
 
 export function SleepTracker() {
   const [bedtime, setBedtime] = useState("");
   const [wakeupTime, setWakeupTime] = useState("");
   const [quality, setQuality] = useState("");
-  const { addSleepEntry, sleepEntries } = useWellness();
+  const { addSleepEntry, sleepEntries = [] } = useWellness();
 
   const qualityOptions = [
-    { value: "excellent", label: "Excellent", emoji: "😴" },
-    { value: "good", label: "Good", emoji: "😊" },
-    { value: "fair", label: "Fair", emoji: "😐" },
-    { value: "poor", label: "Poor", emoji: "😴" },
+    { value: "excellent", label: "Excellent", emoji: "🤩", icon: <Star className="h-5 w-5 text-yellow-400" /> },
+    { value: "good", label: "Good", emoji: "😊", icon: <Smile className="h-5 w-5 text-green-400" /> },
+    { value: "fair", label: "Fair", emoji: "😐", icon: <Meh className="h-5 w-5 text-orange-400" /> },
+    { value: "poor", label: "Poor", emoji: "😴", icon: <Frown className="h-5 w-5 text-red-400" /> },
   ];
 
   const calculateDuration = () => {
     if (bedtime && wakeupTime) {
-      // Use arbitrary same base date, adjust for crossing midnight
       const bed = new Date(`1970-01-01T${bedtime}:00`);
       const wake = new Date(`1970-01-01T${wakeupTime}:00`);
       if (wake < bed) wake.setDate(wake.getDate() + 1);
@@ -53,11 +52,8 @@ export function SleepTracker() {
       const wake = new Date(`1970-01-01T${wakeupTime}:00`);
       if (wake < bed) wake.setDate(wake.getDate() + 1);
       const diffMinutes = Math.round((wake.getTime() - bed.getTime()) / (1000 * 60));
-      // Associate with the wake-up calendar day in local time
       const now = new Date();
-      const wakeDate = new Date(now);
-      // Map to today's date by default (you could add a date picker later)
-      const dateKey = wakeDate.toISOString().slice(0, 10);
+      const dateKey = now.toISOString();
       addSleepEntry({
         date: dateKey,
         bedtime,
@@ -71,158 +67,181 @@ export function SleepTracker() {
     }
   };
 
-  // Build a month dataset (1..daysInMonth) with hours slept (0 if missing)
   const monthData = useMemo(() => {
     const today = new Date();
     const year = today.getFullYear();
     const month = today.getMonth();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const byDay: Record<number, number> = {};
-    sleepEntries.forEach((e) => {
+    const monthEntries = sleepEntries.filter((e) => {
       const d = new Date(e.date);
-      if (d.getMonth() === month && d.getFullYear() === year) {
-        const day = d.getDate();
-        const hours = Math.round((e.durationMinutes / 60) * 100) / 100;
-        byDay[day] = hours;
-      }
+      return d.getMonth() === month && d.getFullYear() === year;
     });
+
     return Array.from({ length: daysInMonth }, (_, i) => {
       const day = i + 1;
-      return { day: String(day), hours: byDay[day] ?? 0 };
+      const entriesForDay = monthEntries.filter((e) => new Date(e.date).getDate() === day);
+      const totalMinutes = entriesForDay.reduce((total, entry) => total + entry.durationMinutes, 0);
+      return {
+        day: String(day),
+        hours: totalMinutes > 0 ? Math.round((totalMinutes / 60) * 100) / 100 : null,
+      };
     });
   }, [sleepEntries]);
+  
+  const getQualityIcon = (qualityValue: string) => {
+    return qualityOptions.find(q => q.value === qualityValue)?.icon;
+  };
 
   return (
-    <div className="space-y-6 wellness-enter">
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold mb-2">Sleep Tracker</h1>
-        <p className="text-muted-foreground">Monitor your sleep patterns for better rest</p>
-      </div>
-
-      {/* Sleep Entry Form */}
-      <Card className="p-6">
-        <h2 className="text-xl font-semibold mb-4 flex items-center">
-          <Moon className="h-5 w-5 mr-2 text-primary" />
-          Log Last Night's Sleep
-        </h2>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          <div className="space-y-2">
-            <Label htmlFor="bedtime" className="flex items-center">
-              <Moon className="h-4 w-4 mr-2" />
-              Bedtime
-            </Label>
-            <Input
-              id="bedtime"
-              type="time"
-              value={bedtime}
-              onChange={(e) => setBedtime(e.target.value)}
-            />
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="wakeup" className="flex items-center">
-              <Sun className="h-4 w-4 mr-2" />
-              Wake up time
-            </Label>
-            <Input
-              id="wakeup"
-              type="time"
-              value={wakeupTime}
-              onChange={(e) => setWakeupTime(e.target.value)}
-            />
-          </div>
+    <div className="min-h-screen w-full flex flex-col items-center justify-center p-4 sm:p-6 md:p-8 wellness-enter">
+      <div className="w-full max-w-6xl mx-auto">
+        <div className="text-center mb-10">
+          <h1 className="text-4xl md:text-5xl font-bold mb-3 tracking-tight bg-gradient-to-br from-primary to-primary/60 text-transparent bg-clip-text">
+            Sleep Sanctuary
+          </h1>
+          <p className="text-muted-foreground text-lg">Monitor and understand your sleep patterns for better rest.</p>
         </div>
 
-        {/* Duration Display */}
-        {bedtime && wakeupTime && (
-          <div className="mb-6 p-4 rounded-xl bg-primary/10 border border-primary/20">
-            <div className="flex items-center justify-center space-x-2">
-              <Clock className="h-5 w-5 text-primary" />
-              <span className="text-lg font-semibold text-primary">
-                Sleep Duration: {calculateDuration()}
-              </span>
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+          {/* Left Column: Entry Form */}
+          <Card className="lg:col-span-2 p-8 glass-card transition-all duration-300 hover:shadow-2xl animate-in fade-in-50 duration-500">
+            <h2 className="text-2xl font-semibold mb-6 flex items-center">
+              <Moon className="h-6 w-6 mr-3 text-primary" />
+              Log Your Sleep
+            </h2>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
+              <TimePicker
+                id="bedtime"
+                label="Went to Bed"
+                value={bedtime}
+                onChange={setBedtime}
+              />
+              <TimePicker
+                id="wakeup"
+                label="Woke Up"
+                value={wakeupTime}
+                onChange={setWakeupTime}
+              />
             </div>
-          </div>
-        )}
 
-        {/* Sleep Quality */}
-        <div className="space-y-3 mb-6">
-          <Label>How was your sleep quality?</Label>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            {qualityOptions.map((option) => (
-              <button
-                key={option.value}
-                onClick={() => setQuality(option.value)}
-                className={`
-                  p-3 rounded-xl text-center border-2 transition-all duration-200
-                  ${quality === option.value 
-                    ? "border-primary bg-primary/10 scale-105" 
-                    : "border-border hover:border-muted-foreground/30 hover:scale-105"
-                  }
-                `}
-              >
-                <div className="text-2xl mb-1">{option.emoji}</div>
-                <div className="text-sm font-medium">{option.label}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <Button 
-          onClick={handleSubmit}
-          disabled={!bedtime || !wakeupTime || !quality}
-          className="w-full"
-        >
-          Save Sleep Entry
-        </Button>
-      </Card>
-
-      {/* Sleep History */}
-      <Card className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold">Sleep History</h2>
-          <TrendingUp className="h-5 w-5 text-muted-foreground" />
-        </div>
-        <div className="space-y-3">
-          {sleepEntries.slice(0, 10).map((entry) => {
-            const hours = Math.floor(entry.durationMinutes / 60);
-            const minutes = entry.durationMinutes % 60;
-            const duration = `${hours}h ${minutes}m`;
-            return (
-              <div key={entry.id} className="flex items-center justify-between p-4 rounded-xl bg-muted/30">
-                <div>
-                  <div className="font-medium">{new Date(entry.date).toLocaleDateString()}</div>
-                  <div className="text-sm text-muted-foreground">
-                    {entry.bedtime} - {entry.wakeup}
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="font-semibold text-primary">{duration}</div>
-                  <div className="text-sm text-secondary">{entry.quality}</div>
+            {bedtime && wakeupTime && (
+              <div className="mb-6 p-4 rounded-xl bg-primary/10 border border-primary/20 animate-in fade-in-50 duration-300">
+                <div className="flex items-center justify-center space-x-3">
+                  <Clock className="h-6 w-6 text-primary" />
+                  <span className="text-xl font-semibold text-primary">
+                    {calculateDuration()}
+                  </span>
                 </div>
               </div>
-            );
-          })}
-        </div>
-      </Card>
+            )}
 
-      {/* Monthly Sleep Chart (Line) */}
-      <Card className="p-6">
-        <h2 className="text-xl font-semibold mb-4">This Month's Sleep (hours per day)</h2>
-        <ChartContainer
-          config={{ hours: { label: "Hours Slept", color: "hsl(var(--primary))" } }}
-          className="w-full"
-        >
-          <LineChart data={monthData}>
-            <CartesianGrid vertical={false} />
-            <XAxis dataKey="day" tickLine={false} axisLine={false} />
-            <YAxis tickLine={false} axisLine={false} />
-            <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
-            <Line type="monotone" dataKey="hours" stroke="var(--color-hours)" strokeWidth={2} dot={{ r: 2 }} />
-          </LineChart>
-        </ChartContainer>
-      </Card>
+            <div className="space-y-3 mb-6">
+              <Label className="text-base">How was your sleep quality?</Label>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {qualityOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => setQuality(option.value)}
+                    className={`
+                      p-4 rounded-xl text-center border-2 transition-all duration-300 ease-in-out
+                      ${quality === option.value 
+                        ? "border-primary bg-primary/10 scale-105 shadow-lg" 
+                        : "border-border bg-background/50 hover:border-primary/50 hover:scale-105"
+                      }
+                    `}
+                  >
+                    <div className="text-3xl mb-2">{option.emoji}</div>
+                    <div className="text-sm font-medium">{option.label}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <Button 
+              onClick={handleSubmit}
+              disabled={!bedtime || !wakeupTime || !quality}
+              className="w-full h-14 text-lg font-semibold transition-transform duration-200 hover:scale-105"
+            >
+              Save Sleep Entry
+            </Button>
+          </Card>
+
+          {/* Right Column: History and Chart */}
+          <div className="lg:col-span-3 space-y-8">
+            <Card className="p-8 glass-card transition-all duration-300 hover:shadow-2xl animate-in fade-in-50 duration-500 delay-200">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-semibold">Sleep History</h2>
+                <TrendingUp className="h-6 w-6 text-muted-foreground" />
+              </div>
+              <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
+                {sleepEntries.slice().reverse().map((entry, index) => {
+                  const hours = Math.floor(entry.durationMinutes / 60);
+                  const minutes = entry.durationMinutes % 60;
+                  const duration = `${hours}h ${minutes}m`;
+                  return (
+                    <div 
+                      key={entry.id} 
+                      className="flex items-center justify-between p-4 rounded-xl bg-muted/50 animate-in slide-in-from-bottom-4 duration-500"
+                      style={{ animationDelay: `${index * 50}ms`, animationFillMode: 'backwards' }}
+                    >
+                      <div className="flex items-center gap-4">
+                         {getQualityIcon(entry.quality)}
+                         <div>
+                            <div className="font-medium">{new Date(entry.date).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}</div>
+                            <div className="text-sm text-muted-foreground">
+                              {entry.bedtime} - {entry.wakeup}
+                            </div>
+                         </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-semibold text-primary text-lg">{duration}</div>
+                        <div className="text-sm capitalize text-muted-foreground">{entry.quality}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+                 {sleepEntries.length === 0 && (
+                    <div className="text-center py-12 text-muted-foreground">
+                        <p>No sleep data yet.</p>
+                        <p>Log your first night to get started!</p>
+                    </div>
+                )}
+              </div>
+            </Card>
+
+            <Card className="p-6 glass-card transition-all duration-300 hover:shadow-2xl animate-in fade-in-50 duration-500 delay-300">
+              <h2 className="text-xl font-semibold mb-4 ml-2">This Month's Sleep Trend</h2>
+              <div className="h-64 w-full">
+                <ChartContainer
+                  config={{ hours: { label: "Hours", color: "hsl(var(--primary))" } }}
+                  className="h-full w-full"
+                >
+                  <ResponsiveContainer>
+                    <LineChart data={monthData}>
+                      <defs>
+                        <linearGradient id="colorHours" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.4}/>
+                          <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted-foreground) / 0.2)" />
+                      <XAxis dataKey="day" tickLine={false} axisLine={false} tickMargin={10} />
+                      <YAxis tickLine={false} axisLine={false} tickMargin={10} unit="h" />
+                      <ChartTooltip
+                        cursor={{ stroke: 'hsl(var(--primary))', strokeWidth: 1, strokeDasharray: '3 3' }}
+                        content={<ChartTooltipContent indicator="line" />}
+                      />
+                      <Area type="monotone" dataKey="hours" stroke="transparent" fillOpacity={1} fill="url(#colorHours)" />
+                      <Line connectNulls type="monotone" dataKey="hours" stroke="hsl(var(--primary))" strokeWidth={3} dot={{ r: 4, fill: 'hsl(var(--primary))' }} activeDot={{ r: 6 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </ChartContainer>
+              </div>
+            </Card>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

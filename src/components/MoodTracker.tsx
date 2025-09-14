@@ -73,7 +73,7 @@ export function StressTracker() {
   const [selectedStressLevel, setSelectedStressLevel] = useState<string>("");
   const [note, setNote] = useState("");
   const [showNoteInput, setShowNoteInput] = useState(false);
-  const { addStressEntry, stressHistory } = useWellness();
+  const { addStressEntry, stressEntries: stressHistory } = useWellness();
 
   const handleSubmit = () => {
     if (selectedStressLevel) {

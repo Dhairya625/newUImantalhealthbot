@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Target, Plus, Trash2, Calendar, Flame, Trophy } from "lucide-react";
+import { Target, Plus, Trash2, Calendar, Flame, Trophy, Pin, PinOff } from "lucide-react";
 import { useWellness } from "@/hooks/wellness-context";
 
 interface Habit {
@@ -12,6 +12,12 @@ interface Habit {
   completed: boolean;
   streak: number;
   category: string;
+}
+
+interface Task {
+  id: string;
+  name: string;
+  completed: boolean;
 }
 
 const categoryColors = {
@@ -25,7 +31,7 @@ const categoryColors = {
 export function HabitTracker() {
   const [newHabitName, setNewHabitName] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
-  const { habits, addHabit, toggleHabit, deleteHabit, getDailyHabitCompletions } = useWellness();
+  const { habits, addHabit, toggleHabit, deleteHabit, getDailyHabitCompletions, tasks, toggleTask, deleteTask, pinnedTasks, pinTask, unpinTask } = useWellness();
 
   const handleAddHabit = () => {
     if (newHabitName.trim()) {
@@ -35,8 +41,8 @@ export function HabitTracker() {
     }
   };
 
-  const completedCount = habits.filter(h => h.completed).length;
-  const totalHabits = habits.length;
+  const completedCount = (habits?.filter(h => h.completed) || []).length;
+  const totalHabits = habits?.length || 0;
   const completionPercentage = totalHabits > 0 ? Math.round((completedCount / totalHabits) * 100) : 0;
 
   return (
@@ -63,6 +69,80 @@ export function HabitTracker() {
             className="bg-card-foreground rounded-full h-2 transition-all duration-500"
             style={{ width: `${completionPercentage}%` }}
           />
+        </div>
+      </Card>
+
+      {/* Pinned Tasks */}
+      <Card className="p-6 border-2 border-yellow-400">
+        <h2 className="text-xl font-semibold flex items-center mb-4">
+          <Target className="h-5 w-5 mr-2 text-yellow-600" />
+          Pinned Tasks
+        </h2>
+        {(!pinnedTasks || pinnedTasks.length === 0) && (
+          <p className="text-muted-foreground">No pinned tasks.</p>
+        )}
+        <div className="space-y-4">
+          {(pinnedTasks || []).map((task) => (
+            <div key={task.id} className="flex items-center justify-between p-3 border rounded-md bg-yellow-50 shadow-sm">
+              <Checkbox
+                checked={task.completed}
+                onCheckedChange={() => toggleTask(task.id)}
+                className="w-5 h-5"
+              />
+              <span className={`flex-1 mx-3 font-bold ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
+                {task.name}
+              </span>
+              <Button
+                onClick={() => unpinTask(task.id)}
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground hover:text-primary h-6 w-6 p-0"
+              >
+                <PinOff className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Today's Tasks */}
+      <Card className="p-6">
+        <h2 className="text-xl font-semibold flex items-center mb-4">
+          <Target className="h-5 w-5 mr-2 text-primary" />
+          Today's Tasks
+        </h2>
+        {(!tasks || tasks.length === 0) && (
+          <p className="text-muted-foreground">No tasks for today.</p>
+        )}
+        <div className="space-y-4">
+          {(tasks || []).map((task) => (
+            <div key={task.id} className="flex items-center justify-between p-3 border rounded-md hover:shadow-sm transition-shadow">
+              <Checkbox
+                checked={task.completed}
+                onCheckedChange={() => toggleTask(task.id)}
+                className="w-5 h-5"
+              />
+              <span className={`flex-1 mx-3 ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
+                {task.name}
+              </span>
+              <Button
+                onClick={() => pinTask(task.id)}
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground hover:text-primary h-6 w-6 p-0"
+              >
+                <Pin className="h-4 w-4" />
+              </Button>
+              <Button
+                onClick={() => deleteTask(task.id)}
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive h-6 w-6 p-0"
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </div>
+          ))}
         </div>
       </Card>
 
@@ -107,7 +187,7 @@ export function HabitTracker() {
 
         {/* Habits */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {habits.map((habit) => (
+          {(habits || []).map((habit) => (
             <Card key={habit.id} className="p-4 hover:shadow-md transition-all duration-200 group">
               <div className="flex flex-col h-full">
                 {/* Header with checkbox and delete */}
@@ -173,14 +253,14 @@ export function HabitTracker() {
               <div>
                 <p className="text-sm text-muted-foreground">Current Streak</p>
                 <p className="text-2xl font-bold text-orange-600">
-                  {habits.length > 0 ? Math.max(...habits.map(h => h.streak)) : 0} days
+                  {(habits && habits.length > 0) ? Math.max(...habits.map(h => h.streak)) : 0} days
                 </p>
               </div>
             </div>
             <div className="text-right">
               <p className="text-sm text-muted-foreground">Best Streak</p>
               <p className="text-lg font-semibold text-orange-600">
-                {habits.length > 0 ? Math.max(...habits.map(h => h.streak)) : 0} days
+                {(habits && habits.length > 0) ? Math.max(...habits.map(h => h.streak)) : 0} days
               </p>
             </div>
           </div>

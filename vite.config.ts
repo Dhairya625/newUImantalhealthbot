@@ -18,5 +18,11 @@ export default defineConfig(({ mode }) => ({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+    // Ensure a single React instance is used and avoid duplicate React copies
+    dedupe: ["react", "react-dom"],
+  },
+  // Help esbuild pre-bundle dependencies that import react/jsx-runtime
+  optimizeDeps: {
+    include: ["react", "react-dom", "framer-motion"],
   },
 }));

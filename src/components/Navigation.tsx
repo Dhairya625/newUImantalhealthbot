@@ -17,15 +17,17 @@ import { Settings as SettingsPanel } from "./Settings";
 
 interface NavigationProps {
   activeSection: string;
+
+  
   onSectionChange: (section: string) => void;
 }
 
 const navItems = [
-  { id: "chat", label: "Chat", icon: MessageCircle },
   { id: "dashboard", label: "Dashboard", icon: Heart },
+  { id: "chat", label: "Chat", icon: MessageCircle },
   { id: "stress", label: "Stress", icon: AlertTriangle },
   { id: "sleep", label: "Sleep", icon: Moon },
-  { id: "habits", label: "Habits", icon: Target },
+  { id: "tasks", label: "Tasks", icon: Target },
   { id: "journal", label: "Journal", icon: PenTool },
   { id: "calendar", label: "Calendar", icon: Calendar },
 ];
@@ -57,88 +59,75 @@ export function Navigation({ activeSection, onSectionChange }: NavigationProps) 
         />
       )}
 
-      {/* Theme Toggle Button - Top right corner */}
-      <div className="fixed top-6 right-24 z-50 md:block">
-        <button
-          onClick={toggleTheme}
-          className="fab group relative flex flex-col items-center justify-center w-14 h-14 transition-all duration-500 ease-out hover:scale-110 active:scale-95 float"
-          title={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
-        >
-          <div className="absolute inset-0 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-          {theme === "dark" ? (
-            <Sun className="h-6 w-6 text-primary-foreground drop-shadow-sm transition-all duration-300 group-hover:rotate-45 group-hover:scale-110" />
-          ) : (
-            <Moon className="h-6 w-6 text-primary-foreground drop-shadow-sm transition-all duration-300 group-hover:-rotate-12 group-hover:scale-110" />
-          )}
-        </button>
-      </div>
+      
 
-      {/* Settings Button - Top right corner */}
-      <div className="fixed top-6 right-6 z-50 md:block">
+      {/* Settings Button and Vertical Navigation - Right side */}
+      <div className="fixed top-6 right-8 z-50 flex flex-col items-center space-y-6 w-14">
+        {/* Settings Button */}
         <button
           onClick={() => setIsSettingsOpen(true)}
-          className="fab group relative flex flex-col items-center justify-center w-14 h-14 transition-all duration-500 ease-out hover:scale-110 active:scale-95 gentle-bounce"
+          className="fab group relative flex flex-col items-center justify-center w-full h-14 transition-all duration-500 ease-out hover:scale-110 active:scale-95"
           title="Settings"
         >
           <div className="absolute inset-0 rounded-full bg-gradient-to-br from-secondary/20 to-tertiary/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
           <Settings className="h-6 w-6 text-primary-foreground drop-shadow-sm transition-all duration-300 group-hover:rotate-90 group-hover:scale-110" />
         </button>
+        
+        {/* Vertical Navigation - Below Settings Button */}
+        <nav className="z-40 md:block mt-4">
+        <div className="nav-glass flex flex-col items-center space-y-4 px-5 py-8 rounded-3xl opacity-40 hover:opacity-100 focus-within:opacity-100 transition-all duration-500 hover:scale-105">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeSection === item.id;
+              
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    onSectionChange(item.id);
+                    setIsMenuOpen(false);
+                  }}
+                  className={cn(
+                    "group relative flex flex-col items-center justify-center w-18 h-18 rounded-2xl",
+                    "transition-all duration-500 ease-out hover:scale-125 active:scale-95",
+                    "transform-gpu will-change-transform",
+                    isActive 
+                      ? "bg-gradient-to-br from-primary/30 via-primary/20 to-primary/10 text-primary shadow-lg shadow-primary/20 scale-110" 
+                      : "text-muted-foreground hover:text-foreground hover:bg-gradient-to-br hover:from-muted/30 hover:to-muted/10"
+                  )}
+                  title={item.label}
+                >
+                  {/* Glow effect for active */}
+                  {isActive && (
+                    <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 animate-pulse" />
+                  )}
+                  
+                  {/* Hover glow effect */}
+                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-primary/10 to-accent/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  
+                  {/* Icon with enhanced effects */}
+                  <Icon className={cn(
+                    "relative z-10 h-8 w-8 transition-all duration-300 drop-shadow-sm",
+                    isActive ? "text-primary scale-110" : "group-hover:text-foreground group-hover:scale-110",
+                    item.id === 'chat' && "group-hover:animate-pulse",
+                    item.id === 'dashboard' && "group-hover:animate-bounce"
+                  )} />
+                  
+                  {/* Enhanced tooltip */}
+                  <div className={cn(
+                    "absolute right-full ml-6 top-1/2 transform -translate-y-1/2 px-4 py-3 text-sm font-medium rounded-xl",
+                    "glass-card opacity-0 group-hover:opacity-100 transition-all duration-300 group-hover:translate-x-1",
+                    "backdrop-blur-xl border border-white/20 text-foreground shadow-lg"
+                  )}>
+                    {item.label}
+                    <div className="absolute top-1/2 -left-1 transform -translate-y-1/2 w-3 h-3 bg-card/80 border border-white/20 rotate-45"></div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
       </div>
-
-      {/* macOS Dock-style Navigation - Enhanced */}
-      <nav className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-40 md:block">
-        <div className="nav-glass flex items-center space-x-4 px-8 py-5 rounded-3xl opacity-40 hover:opacity-100 focus-within:opacity-100 transition-all duration-500 hover:scale-105">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeSection === item.id;
-            
-            return (
-              <button
-                key={item.id}
-                onClick={() => {
-                  onSectionChange(item.id);
-                  setIsMenuOpen(false);
-                }}
-                className={cn(
-                  "group relative flex flex-col items-center justify-center w-18 h-18 rounded-2xl",
-                  "transition-all duration-500 ease-out hover:scale-125 active:scale-95",
-                  "transform-gpu will-change-transform",
-                  isActive 
-                    ? "bg-gradient-to-br from-primary/30 via-primary/20 to-primary/10 text-primary shadow-lg shadow-primary/20 scale-110" 
-                    : "text-muted-foreground hover:text-foreground hover:bg-gradient-to-br hover:from-muted/30 hover:to-muted/10"
-                )}
-                title={item.label}
-              >
-                {/* Glow effect for active */}
-                {isActive && (
-                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 animate-pulse" />
-                )}
-                
-                {/* Hover glow effect */}
-                <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-primary/10 to-accent/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                
-                {/* Icon with enhanced effects */}
-                <Icon className={cn(
-                  "relative z-10 h-8 w-8 transition-all duration-300 drop-shadow-sm",
-                  isActive ? "text-primary scale-110" : "group-hover:text-foreground group-hover:scale-110",
-                  item.id === 'chat' && "group-hover:animate-pulse",
-                  item.id === 'dashboard' && "group-hover:animate-bounce"
-                )} />
-                
-                {/* Enhanced tooltip */}
-                <div className={cn(
-                  "absolute -bottom-14 left-1/2 transform -translate-x-1/2 px-4 py-3 text-sm font-medium rounded-xl",
-                  "glass-card opacity-0 group-hover:opacity-100 transition-all duration-300 group-hover:translate-y-1",
-                  "backdrop-blur-xl border border-white/20 text-foreground shadow-lg"
-                )}>
-                  {item.label}
-                  <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 w-3 h-3 bg-card/80 border border-white/20 rotate-45"></div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </nav>
 
       {/* Mobile Navigation - Full screen overlay */}
       {isMenuOpen && (
