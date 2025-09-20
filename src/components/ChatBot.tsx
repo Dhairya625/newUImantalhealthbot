@@ -174,6 +174,13 @@ export function ChatBot({ isPopup = false, context = 'tab' }: ChatBotProps) {
     }, 5000);
   };
 
+  // Utility: sleep and overload detection for retry/backoff
+  const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
+  const isOverloadedError = (err: unknown): boolean => {
+    const msg = (err as any)?.message || String(err || "");
+    return /503|overloaded|try again later/i.test(msg);
+  };
+
   // Sync from context on mount and whenever context updates
   useEffect(() => {
     if (chatMessages && Array.isArray(chatMessages)) {
@@ -281,9 +288,6 @@ export function ChatBot({ isPopup = false, context = 'tab' }: ChatBotProps) {
           { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
           { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
           { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
-          // Intentionally allow supportive talk about self-harm while blocking harmful instructions
-          // If available in your SDK version:
-          // { category: HarmCategory.HARM_CATEGORY_SELF_HARM, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
         ],
         generationConfig: {
           temperature: 0.6,
@@ -292,21 +296,47 @@ export function ChatBot({ isPopup = false, context = 'tab' }: ChatBotProps) {
         }
       });
 
-      const result = await chat.sendMessage(userText);
-      const response = await result.response;
-      const text = response.text();
+      // Retry with exponential backoff for overloads
+      let lastError: any = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const result = await chat.sendMessage(userText);
+          const response = await result.response;
+          const text = response.text();
 
-      // Gentle crisis interjection if user text indicates urgent risk
-      const crisisRegex = /(suicide|kill myself|end it|can't go on|self[- ]?harm|hurt myself)/i;
-      if (crisisRegex.test(userText)) {
-        return "• I'm really sorry you're feeling this way. You deserve *immediate support*.\n• If you might be in danger or thinking about hurting yourself, please contact *local emergency services*, a trusted person, or a crisis line in your area *right now*.\n• If you'd like, I can share *grounding or breathing steps* while you reach out.\n• " + text;
+          // Gentle crisis interjection if user text indicates urgent risk
+          const crisisRegex = /(suicide|kill myself|end it|can't go on|self[- ]?harm|hurt myself)/i;
+          if (crisisRegex.test(userText)) {
+            return "• I'm really sorry you're feeling this way. You deserve *immediate support*.\n• If you might be in danger or thinking about hurting yourself, please contact *local emergency services*, a trusted person, or a crisis line in your area *right now*.\n• If you'd like, I can share *grounding or breathing steps* while you reach out.\n• " + text;
+          }
+
+          return text;
+        } catch (err) {
+          lastError = err;
+          if (isOverloadedError(err)) {
+            // Backoff with jitter
+            const delay = 800 * Math.pow(2, attempt) + Math.floor(Math.random() * 300);
+            await sleep(delay);
+            continue;
+          }
+          throw err;
+        }
       }
 
-      return text;
+      // After retries, notify and fallback
+      if (isOverloadedError(lastError)) {
+        addNotification("The AI is overloaded right now. I’ll use a reliable fallback response.", "info");
+      }
+      const fallback = botResponses[Math.floor(Math.random() * botResponses.length)];
+      return fallback;
     } catch (error) {
       console.error(error);
-      // Propagate error so caller can display banner and choose fallback
-      throw error;
+      // Fallback immediately on errors
+      if (isOverloadedError(error)) {
+        addNotification("The AI service is currently overloaded. Using fallback for now.", "info");
+      }
+      const fallback = botResponses[Math.floor(Math.random() * botResponses.length)];
+      return fallback;
     }
   };
 
@@ -356,18 +386,33 @@ Tailor activities to user's specific situation and emotional state. Be creative 
 Respond ONLY in JSON with keys stressLevel and todos.
 User message: "${userText.replace(/"/g, '\\"')}"`
 
-      const analysisPromise = model.generateContent(prompt);
-      
-      // Race between analysis and timeout
-      const result = await Promise.race([analysisPromise, timeoutPromise]);
-      const text = result.response.text();
-      
-      const jsonStart = text.indexOf('{');
-      const jsonEnd = text.lastIndexOf('}');
-      const json = jsonStart >= 0 && jsonEnd >= 0 ? text.slice(jsonStart, jsonEnd + 1) : "";
+      // Retry analysis with backoff and timeout
+      let parsed: Analyzed | null = null;
+      let lastError: any = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const result = await Promise.race([model.generateContent(prompt), timeoutPromise]);
+          const text = result.response.text();
+          const jsonStart = text.indexOf('{');
+          const jsonEnd = text.lastIndexOf('}');
+          const json = jsonStart >= 0 && jsonEnd >= 0 ? text.slice(jsonStart, jsonEnd + 1) : "";
+
+          parsed = JSON.parse(json) as Analyzed;
+          break;
+        } catch (err) {
+          lastError = err;
+          if (isOverloadedError(err)) {
+            const delay = 600 * Math.pow(2, attempt) + Math.floor(Math.random() * 300);
+            await sleep(delay);
+            continue;
+          }
+          // Otherwise fall back immediately
+          break;
+        }
+      }
       
       try {
-        const parsed = JSON.parse(json) as Analyzed;
+        if (!parsed) throw lastError || new Error("Analysis unavailable");
         // Basic validation
         if (!parsed.stressLevel || !Array.isArray(parsed.todos)) throw new Error("Invalid parse");
         // Trim and cap todos
@@ -378,7 +423,10 @@ User message: "${userText.replace(/"/g, '\\"')}"`
         if (parsed.todos.length === 0) parsed.todos = fallback.todos;
         return parsed;
       } catch (parseError) {
-        console.warn('Failed to parse AI response, using fallback:', parseError);
+        if (isOverloadedError(lastError)) {
+          addNotification("Analysis is temporarily unavailable due to high load. Using local fallback.", "info");
+        }
+        console.warn('Failed to analyze AI response, using fallback:', parseError || lastError);
         return fallback;
       }
     } catch (err) {
@@ -450,6 +498,50 @@ User message: "${userText.replace(/"/g, '\\"')}"`
     });
     
     return exercises;
+  };
+
+  // Extract explicit stress/anxiety causes from user text
+  const extractStressCauses = (text: string): { causes: string[]; hasClearReason: boolean } => {
+    const lower = text.toLowerCase();
+    const causeKeywords: Record<string, RegExp[]> = {
+      work: [/\bwork\b|\bjob\b|\bdeadline\b|\bmeeting\b|\bproject\b|\bboss\b|\bcolleague\b/],
+      relationships: [/relationship|partner|family|friend|argument|conflict/],
+      health: [/health|medical|doctor|hospital|sick|illness|injur/],
+      finances: [/finance|money|bill|debt|rent|mortgage|expense|pay\b|salary/],
+      school: [/school|exam|test|assignment|homework|study|class|college|university/],
+      commute: [/traffic|commute|train|bus|subway|transport|drive/],
+      social: [/social|party|event|crowd/],
+      sleep: [/sleep|insomnia|tired|fatigue|restless/]
+    } as const;
+
+    const causes: string[] = [];
+    Object.entries(causeKeywords).forEach(([label, patterns]) => {
+      if (patterns.some((r) => r.test(lower))) causes.push(label);
+    });
+    return { causes, hasClearReason: causes.length > 0 };
+  };
+
+  // Check whether a task is relevant to detected stress causes
+  const isTaskRelevant = (taskTitle: string, causes: string[]): boolean => {
+    if (causes.length === 0) return false;
+    const t = taskTitle.toLowerCase();
+
+    // Generic evidence-based coping tasks allowed for any cause
+    const genericCoping = /(breath|breathing|meditat|mindful|ground|journal|gratitude|walk|stretch|relax|progressive muscle|body scan|box breathing|4-7-8|hydrate|drink water|step outside|fresh air)/;
+    if (genericCoping.test(t)) return true;
+
+    const relevanceMap: Record<string, RegExp> = {
+      work: /(plan|prioriti[sz]e|todo|to-do|time block|pomodoro|focus|inbox|email|meeting prep|break down|task list|schedule|organize|draft)/,
+      relationships: /(text|call|reach out|apolog|listen|set boundary|express|communicat|write a message|plan a talk)/,
+      health: /(call doctor|book (an )?appointment|take medication|medication|rest|gentle|checkup|hydrate|nourish)/,
+      finances: /(budget|track expense|review subscription|pay bill|plan payment|savings|spend)/,
+      school: /(study|flashcard|revise|outline|read chapter|practice problems|submit|office hours|notes)/,
+      commute: /(leave early|alternate route|pack early|prepare|podcast|music playlist|breath during commute)/,
+      social: /(confirm plan|set boundary|say no|shorten duration|choose venue|ask a friend)/,
+      sleep: /(wind down|sleep routine|no screens|dim lights|journaling before bed|breathing in bed|caffeine cutoff|set alarm)/
+    } as const;
+
+    return causes.some((c) => relevanceMap[c]?.test(t) || false);
   };
 
   // Extract actionable tasks from bot response and categorize (improved fragmentation)
@@ -871,6 +963,7 @@ User message: "${userText.replace(/"/g, '\\"')}"`;
       // Regular stress and habit analysis (existing logic)
       setIsAnalyzing(true);
       const analysis = await analyzeUserText(userMessage.text);
+      const { causes, hasClearReason } = extractStressCauses(userMessage.text);
       
       // Only add stress entry if we detected a meaningful stress level (not just fallback "moderate")
       const meaningfulStress = analysis.stressLevel !== "moderate" || 
@@ -889,11 +982,11 @@ User message: "${userText.replace(/"/g, '\\"')}"`;
         );
         
         // When stress is more than moderate, always suggest comprehensive stress relief activities
-        const hasClearStressReason = /(work|job|deadline|meeting|project|boss|colleague|relationship|partner|family|friend|health|medical|doctor|hospital|finances|money|bill|debt|rent|mortgage|school|exam|test|assignment|homework|traffic|commute|weather|noise|crowd|social|party|event)/.test(userMessage.text.toLowerCase());
+        const hasClearStressReason = hasClearReason;
         const shouldSuggestHabits = (analysis.stressLevel === "high" || analysis.stressLevel === "very-high") && hasClearStressReason;
         
         // Always suggest habits for high stress levels, regardless of reason (but ensure we have todos)
-        if ((analysis.stressLevel === "high" || analysis.stressLevel === "very-high")) {
+        if ((analysis.stressLevel === "high" || analysis.stressLevel === "very-high") && hasClearStressReason) {
           // Use AI-generated stress relief activities from analysis
           let stressReliefActivities = analysis.todos;
           
@@ -904,19 +997,22 @@ User message: "${userText.replace(/"/g, '\\"')}"`;
           }
           
           try {
-            const newHabitsAdded = addTodos(stressReliefActivities.map(t => ({ title: t.title, category: t.category })));
-            
-            // Show notification only for actually added habits (no duplicates)
-            if (newHabitsAdded.length > 0) {
-              const habitNames = newHabitsAdded.join(", ");
+            // Filter activities by relevance to detected causes before adding
+            const relevantActivities = stressReliefActivities.filter(t => isTaskRelevant(t.title, causes));
+            const toAdd = relevantActivities.length > 0 ? relevantActivities : stressReliefActivities;
+            const newTasksAdded = registerChatSuggestions(toAdd.map(t => ({ title: t.title, category: t.category })));
+
+            // Show notification only for actually added tasks (no duplicates)
+            if (newTasksAdded.length > 0) {
+              const taskNames = newTasksAdded.join(", ");
               addNotification(
-                `I've added ${newHabitsAdded.length} stress relief activities to your habit tracker to help you manage your stress: ${habitNames}`,
+                `I've added ${newTasksAdded.length} stress-related tasks to Today's Tasks: ${taskNames}`,
                 "success"
               );
-            } else if (stressReliefActivities.length > 0) {
-              // Show info notification when habits were suggested but already existed
+            } else if (toAdd.length > 0) {
+              // Show info notification when tasks were suggested but already existed
               addNotification(
-                `I suggested ${stressReliefActivities.length} stress relief activities, but they were already in your tracker`,
+                `I suggested ${toAdd.length} stress tasks, but they were already listed today`,
                 "info"
               );
             }
@@ -950,7 +1046,10 @@ User message: "${userText.replace(/"/g, '\\"')}"`;
       const reply = await generateBotReply([...messages, userMessage], userMessage.text);
 
       // Extract actionable tasks from the bot's response and register as chat suggestions
-      const suggestedTasks = extractTasksFromBotResponse(reply);
+      const suggestedTasksRaw = extractTasksFromBotResponse(reply);
+      const suggestedTasks = hasClearReason
+        ? suggestedTasksRaw.filter(t => isTaskRelevant(t.title, causes))
+        : [];
       
       if (suggestedTasks.length > 0) {
         try {
@@ -969,8 +1068,9 @@ User message: "${userText.replace(/"/g, '\\"')}"`;
 
       // Also ensure stress-related tasks are captured and added to today's tasks
       // This provides additional coverage beyond the stress relief activities added earlier
-      if (meaningfulStress && (analysis.stressLevel === "high" || analysis.stressLevel === "very-high")) {
-        const stressRelatedTasks = extractTasksFromBotResponse(reply);
+      if (meaningfulStress && (analysis.stressLevel === "high" || analysis.stressLevel === "very-high") && hasClearStressReason) {
+        const stressRelatedTasksAll = extractTasksFromBotResponse(reply);
+        const stressRelatedTasks = stressRelatedTasksAll.filter(t => isTaskRelevant(t.title, causes));
         
         if (stressRelatedTasks.length > 0) {
           try {

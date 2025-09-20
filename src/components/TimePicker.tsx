@@ -14,9 +14,10 @@ interface TimePickerProps {
   onChange: (value: string) => void;
   label: string;
   id: string;
+  compact?: boolean;
 }
 
-export function TimePicker({ value, onChange, label, id }: TimePickerProps) {
+export function TimePicker({ value, onChange, label, id, compact = false }: TimePickerProps) {
   const [hour, minute] = value.split(":").map(Number);
   const [activeMode, setActiveMode] = React.useState<"hour" | "minute">("hour");
   const [isOpen, setIsOpen] = React.useState(false);
@@ -64,9 +65,34 @@ export function TimePicker({ value, onChange, label, id }: TimePickerProps) {
     type: "hour" | "minute"
   ) => {
     const items = [];
-    const radius = 85;
-    const center = 110;
+    const radius = compact ? 62 : 75;
+    const center = compact ? 96 : 104;
     const isActive = activeMode === type;
+
+    // Subtle tick marks around the dial for context
+    const tickMarks = Array.from({ length: count }).map((_, i) => {
+      const angle = (i / count) * 2 * Math.PI - Math.PI / 2;
+      const outerX = center + (radius + 4) * Math.cos(angle);
+      const outerY = center + (radius + 4) * Math.sin(angle);
+      const innerX = center + (radius - (i % 5 === 0 ? 8 : 4)) * Math.cos(angle);
+      const innerY = center + (radius - (i % 5 === 0 ? 8 : 4)) * Math.sin(angle);
+      return (
+        <div
+          key={`tick-${type}-${i}`}
+          className={cn(
+            "absolute",
+            i % 5 === 0
+              ? "w-[2px] h-[9px] bg-muted-foreground/50"
+              : "w-[1px] h-[5px] bg-muted-foreground/30"
+          )}
+          style={{
+            left: innerX,
+            top: innerY,
+            transform: `translate(-50%, -50%) rotate(${(i / count) * 360}deg)`,
+          }}
+        />
+      );
+    });
 
     for (let i = 0; i < count; i += step) {
       const angle = (i / count) * 2 * Math.PI - Math.PI / 2;
@@ -84,14 +110,15 @@ export function TimePicker({ value, onChange, label, id }: TimePickerProps) {
             }
           }}
           className={cn(
-            "absolute w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-300 ease-in-out",
+            "absolute rounded-full flex items-center justify-center text-sm font-medium transition-all duration-300 ease-in-out",
+            compact ? "w-8 h-8" : "w-9 h-9",
             "transform -translate-x-1/2 -translate-y-1/2 hover:scale-110 active:scale-95",
-            "border-2 backdrop-blur-sm",
+            "border-[1.5px] backdrop-blur-sm",
             isSelected
-              ? "bg-gradient-to-br from-primary to-primary-glow text-primary-foreground border-primary/40 shadow-lg shadow-primary/30 scale-110"
+              ? "bg-gradient-to-br from-primary to-primary-glow text-primary-foreground border-primary/50 shadow-xl shadow-primary/40 scale-110 ring-2 ring-primary/30"
               : isActive
-              ? "bg-gradient-to-br from-card/60 to-card/80 border-border hover:border-primary/40 text-foreground hover:bg-gradient-to-br hover:from-primary/10 hover:to-primary-soft/20"
-              : "bg-gradient-to-br from-muted/50 to-muted/70 border-border/50 text-muted-foreground opacity-60 hover:opacity-80"
+              ? "bg-gradient-to-br from-card/60 to-card/80 border-border hover:border-primary/40 text-foreground hover:bg-gradient-to-br hover:from-primary/10 hover:to-primary-soft/20 hover:shadow hover:shadow-primary/10"
+              : "bg-gradient-to-br from-muted/50 to-muted/70 border-border/50 text-muted-foreground opacity-70 hover:opacity-90"
           )}
           style={{ left: x, top: y }}
         >
@@ -115,34 +142,52 @@ export function TimePicker({ value, onChange, label, id }: TimePickerProps) {
       />
     );
     
-    // Add selected value indicator line
-    const selectedLine = currentValue >= 0 ? (
-      <div
-        key="line"
-        className={cn(
-          "absolute w-0.5 transition-all duration-500 ease-in-out transform -translate-x-1/2",
-          isActive && currentValue >= 0
-            ? "bg-gradient-to-t from-primary to-primary-glow shadow-sm shadow-primary/30"
-            : "bg-muted-foreground/40 opacity-40"
-        )}
-        style={{
-          left: center,
-          top: center - 15,
-          height: radius - 25,
-          transformOrigin: `50% ${15 + radius - 25}px`,
-          transform: `translateX(-50%) rotate(${(currentValue / count) * 360 - 90}deg)`,
-        }}
-      />
-    ) : null;
+    // Add selected value indicator line (hand) pivoted at the dial center
+    const selectedLine = currentValue >= 0 ? (() => {
+      const handHeight = radius - (compact ? 18 : 22);
+      return (
+        <div
+          key="line"
+          className={cn(
+            "absolute w-0.5 transition-all duration-500 ease-in-out transform -translate-x-1/2",
+            isActive && currentValue >= 0
+              ? "bg-gradient-to-t from-primary to-primary-glow shadow-sm shadow-primary/30"
+              : "bg-muted-foreground/40 opacity-40"
+          )}
+          style={{
+            left: center,
+            top: center - handHeight,
+            height: handHeight,
+            transformOrigin: "50% 100%",
+            transform: `translateX(-50%) rotate(${(currentValue / count) * 360}deg)`,
+          }}
+        />
+      );
+    })() : null;
 
     return (
-      <div className="relative w-56 h-56 my-6">
+      <div className={cn("relative my-4", compact ? "w-48 h-48" : "w-52 h-52")}> 
+        {/* outer glow ring */}
+        <div
+          className={cn(
+            "absolute rounded-full transition-all duration-500",
+            compact ? "inset-[6px]" : "inset-2",
+            isActive ? "shadow-[0_0_0_2px_rgba(59,130,246,0.15)]" : ""
+          )}
+          style={{
+            background:
+              "radial-gradient(closest-side, rgba(59,130,246,0.08), transparent 70%)",
+          }}
+        />
+        {/* dial boundary */}
         <div className={cn(
-          "absolute inset-4 border-2 rounded-full transition-all duration-500",
+          "absolute border-2 rounded-full transition-all duration-500",
+          compact ? "inset-5" : "inset-4",
           isActive 
             ? "border-primary/30 shadow-lg shadow-primary/20" 
             : "border-dashed border-border/50"
         )}></div>
+        {tickMarks}
         {selectedLine}
         {centerDot}
         {items}
@@ -164,7 +209,7 @@ export function TimePicker({ value, onChange, label, id }: TimePickerProps) {
             className={cn(
               "w-full h-14 text-lg justify-center font-mono transition-all duration-300",
               "glass-card hover:scale-[1.02] active:scale-[0.98]",
-              "border-border hover:border-primary/40 hover:shadow-lg hover:shadow-primary/10",
+              "border-border hover:border-primary/50 hover:shadow-lg hover:shadow-primary/20",
               "focus:border-primary focus:ring-2 focus:ring-primary/20",
               value && "text-foreground",
               !value && "text-muted-foreground"
@@ -174,11 +219,25 @@ export function TimePicker({ value, onChange, label, id }: TimePickerProps) {
             {value || "Select time"}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0 glass-card-intense border-border shadow-2xl">
-          <div className="p-6">
+        <PopoverContent className="w-auto p-0 glass-card-intense border-border shadow-2xl max-w-[92vw] sm:max-w-[24rem]">
+          <div
+            className={cn(compact ? "p-4" : "p-5")}
+            style={{
+              background:
+                "radial-gradient(1200px 300px at 50% -10%, rgba(59,130,246,0.10), transparent), radial-gradient(600px 200px at 50% 120%, rgba(59,130,246,0.08), transparent)",
+            }}
+          >
             {/* Time Display and Controls */}
-            <div className="text-center mb-8">
-              <div className="flex items-center justify-center space-x-4 mb-6">
+            <div className={cn("text-center", compact ? "mb-4" : "mb-6")}> 
+              {/* Glowing current time header */}
+              <div className={cn(compact ? "mb-3" : "mb-5")}> 
+                <div className="inline-flex items-baseline px-4 py-2 rounded-xl bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border border-primary/20 shadow-inner">
+                  <span className={cn("font-mono tracking-tight bg-clip-text text-transparent bg-gradient-to-br from-primary to-primary-glow drop-shadow-[0_2px_6px_rgba(59,130,246,0.35)]", compact ? "text-2xl" : "text-3xl")}>
+                    {`${String(isNaN(hour) ? "00" : hour).padStart(2, "0")}:${String(isNaN(minute) ? "00" : minute).padStart(2, "0")}`}
+                  </span>
+                </div>
+              </div>
+              <div className={cn("flex items-center justify-center", compact ? "space-x-2.5 mb-4" : "space-x-3 mb-5")}> 
                 {/* Hour Section */}
                 <div className="flex flex-col items-center space-y-2">
                   <button
@@ -190,7 +249,8 @@ export function TimePicker({ value, onChange, label, id }: TimePickerProps) {
                   <button
                     onClick={() => setActiveMode("hour")}
                     className={cn(
-                      "px-4 py-3 text-3xl font-mono rounded-xl transition-all duration-300 min-w-[80px]",
+                      "px-4 font-mono rounded-xl transition-all duration-300",
+                      compact ? "py-2 text-xl min-w-[64px]" : "py-2.5 text-2xl min-w-[72px]",
                       activeMode === "hour"
                         ? "bg-gradient-to-br from-primary to-primary-glow text-primary-foreground shadow-lg shadow-primary/30 scale-105"
                         : "bg-gradient-to-br from-card/60 to-card/80 text-foreground hover:scale-105 hover:bg-gradient-to-br hover:from-primary/10 hover:to-primary-soft/20"
@@ -207,7 +267,7 @@ export function TimePicker({ value, onChange, label, id }: TimePickerProps) {
                 </div>
                 
                 {/* Separator */}
-                <div className="text-3xl font-mono text-muted-foreground animate-pulse">:</div>
+                <div className={cn("font-mono text-muted-foreground animate-pulse", compact ? "text-xl" : "text-2xl")}>:</div>
                 
                 {/* Minute Section */}
                 <div className="flex flex-col items-center space-y-2">
@@ -220,7 +280,8 @@ export function TimePicker({ value, onChange, label, id }: TimePickerProps) {
                   <button
                     onClick={() => setActiveMode("minute")}
                     className={cn(
-                      "px-4 py-3 text-3xl font-mono rounded-xl transition-all duration-300 min-w-[80px]",
+                      "px-4 font-mono rounded-xl transition-all duration-300",
+                      compact ? "py-2 text-xl min-w-[64px]" : "py-2.5 text-2xl min-w-[72px]",
                       activeMode === "minute"
                         ? "bg-gradient-to-br from-primary to-primary-glow text-primary-foreground shadow-lg shadow-primary/30 scale-105"
                         : "bg-gradient-to-br from-card/60 to-card/80 text-foreground hover:scale-105 hover:bg-gradient-to-br hover:from-primary/10 hover:to-primary-soft/20"
@@ -238,7 +299,7 @@ export function TimePicker({ value, onChange, label, id }: TimePickerProps) {
               </div>
               
               {/* Mode Indicator */}
-              <div className="flex justify-center space-x-4 mb-6">
+              <div className={cn("flex justify-center", compact ? "space-x-3 mb-4" : "space-x-4 mb-6")}> 
                 <button
                   onClick={() => setActiveMode("hour")}
                   className={cn(
@@ -265,23 +326,42 @@ export function TimePicker({ value, onChange, label, id }: TimePickerProps) {
             </div>
             
             {/* Dial */}
-            <div className="flex justify-center">
+            <div className={cn("flex justify-center", compact ? "scale-[0.92]" : "scale-[0.95] md:scale-100")}> 
               {activeMode === "hour" && renderDial(24, isNaN(hour) ? -1 : hour, (h) => handleTimeChange("hour", h), 1, "hour")}
               {activeMode === "minute" && renderDial(60, isNaN(minute) ? -1 : minute, (m) => handleTimeChange("minute", m), 5, "minute")}
             </div>
             
             {/* Action Buttons */}
-            <div className="flex justify-center space-x-3 mt-6">
+            <div className={cn("flex justify-center flex-wrap", compact ? "gap-2 mt-4" : "gap-2.5 mt-5")}> 
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const now = new Date();
+                  const h = String(now.getHours()).padStart(2, "0");
+                  const m = String(Math.round(now.getMinutes() / 5) * 5).padStart(2, "0");
+                  onChange(`${h}:${m}`);
+                }}
+                className={cn("glass-card hover:bg-muted/30 transition-all duration-200", compact ? "px-4 py-1.5" : "px-5 py-2")}
+              >
+                Now
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => onChange("")}
+                className={cn("glass-card hover:bg-muted/30 transition-all duration-200", compact ? "px-4 py-1.5" : "px-5 py-2")}
+              >
+                Clear
+              </Button>
               <Button
                 variant="outline"
                 onClick={() => setIsOpen(false)}
-                className="px-6 py-2 glass-card hover:bg-muted/30 transition-all duration-200"
+                className={cn("glass-card hover:bg-muted/30 transition-all duration-200", compact ? "px-4 py-1.5" : "px-5 py-2")}
               >
                 Cancel
               </Button>
               <Button
                 onClick={() => setIsOpen(false)}
-                className="px-6 py-2 bg-gradient-to-r from-primary to-primary-glow hover:from-primary-glow hover:to-primary text-primary-foreground shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200"
+                className={cn("bg-gradient-to-r from-primary to-primary-glow hover:from-primary-glow hover:to-primary text-primary-foreground shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200", compact ? "px-4 py-1.5" : "px-5 py-2")}
               >
                 Confirm
               </Button>

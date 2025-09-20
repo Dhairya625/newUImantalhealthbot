@@ -116,12 +116,14 @@ export function SleepTracker() {
                 label="Went to Bed"
                 value={bedtime}
                 onChange={setBedtime}
+                compact
               />
               <TimePicker
                 id="wakeup"
                 label="Woke Up"
                 value={wakeupTime}
                 onChange={setWakeupTime}
+                compact
               />
             </div>
 
